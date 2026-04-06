@@ -9,8 +9,8 @@ Minimal CLI tool to run a background process at a fixed interval. Handles proces
 ### 1. Clone the repo
 
 ```bash
-git clone https://github.com/Azeem0002/autoclear.git
-cd autoclear
+git clone https://github.com/Azeem0002/task_automator.git
+cd task_automator
 ```
 
 ### 2. Install dependencies
@@ -22,7 +22,7 @@ pip install typer psutil pytimeparse loguru platformdirs
 ### 3. Run the CLI
 
 ```bash
-python controller.py --help
+python3 controller.py --help
 ```
 
 ---
@@ -32,7 +32,7 @@ python controller.py --help
 ### Start AutoClear
 
 ```bash
-python controller.py start -i 1h
+python3 controller.py start -i 1h. default: 1h
 ```
 
 **Interval formats supported:**
@@ -49,7 +49,7 @@ Max interval: **2 days**
 ### Check Status
 
 ```bash
-python controller.py status
+python3 controller.py status
 ```
 
 Returns:
@@ -63,7 +63,7 @@ Returns:
 ### Stop AutoClear
 
 ```bash
-python controller.py stop
+python3 controller.py stop
 ```
 
 Safely terminates the process and cleans PID file.
@@ -73,7 +73,7 @@ Safely terminates the process and cleans PID file.
 ### Restart AutoClear
 
 ```bash
-python your_cli_file.py restart -i 30m
+python3 controller.py restart -i 30m. default: 1h
 ```
 
 Stops and starts with a new interval.

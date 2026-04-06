@@ -53,7 +53,8 @@ def _setup_logger(log_file: Path)-> None:
         logger.add(
             sink= sys.stdout,
             level= "DEBUG",
-            format="{time:YYYY-MM-DD HH:mm:ss} | <level>{level: <8}</level> | <level>{module}.{function}:{line}</level> | <level>{message}</level>",
+            format="<yellow>{time:YYYY-MM-DD HH:mm:ss}</yellow> | <level>{level: <8}</level> | <level>{module}.{function}:{line}</level> | <yellow>{message}</yellow>",
+            colorize=True,
             enqueue=True,
             backtrace=True,
             catch=True,
