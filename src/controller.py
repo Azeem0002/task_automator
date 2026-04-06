@@ -161,7 +161,7 @@ def status_autoclear()-> str:
     pid = _read_file_path(pid_file)
     if pid is None:
         logger.warning("Stale PID file detected")
-        return "STALE"
+        return "STALE: Process is stale"
     
     running = _is_process_running(pid)
     if not running:
@@ -172,7 +172,7 @@ def status_autoclear()-> str:
         logger.warning("PID belongs to another process")
         return "STOPPED: unknown process"
 
-    return "RUNNING"
+    return "Autoclear is running"
 
 def stop_autoclear()-> str:
 
