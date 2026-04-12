@@ -29,40 +29,43 @@ def _setup_env()-> Path:
     file_log = LOG_DIR / "autoclear.log"
     return file_log
 
-def _setup_logger(file_log: Path)-> None:
+def setup_logger(log_file: Path)-> None:
+
+    ENV = os.getenv("APP_ENV", "dev")
 
     logger.remove()
-    ENV = os.getenv("APP_NAME", "dev")
-    
+     # --- To STDOUT (terminal) ---
     if ENV == "prod":
-
         logger.add(
-            sink= sys.stdout,
-            level= "INFO",
+            sys.stdout,
+            level="INFO",
             enqueue=True,
         )
     else:
         logger.add(
-            sink= sys.stdout,
+            sys.stdout,
             level="DEBUG",
-            format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | {level: <8} | {module}.{function}:{line} | <level>{message}</level>",
-            enqueue= True,
-            backtrace= True,
+            format="<yellow>{time:YYYY-MM-DD HH:mm:ss}</yellow> | "
+                   "<level>{level: <8}</level> | "
+                   "<cyan>{module}.{function}:{line}</cyan> | "
+                   "<level>{message}</level>",
+            colorize=True,
+            enqueue=True,
+            backtrace=True,
         )
 
-        logger.add(
-        sink = file_log,
-        rotation= "1 MB",
-        retention= "2 days",
-        enqueue= True,
-        backtrace=True
+    # --- To FILE (always consistent) ---
+    logger.add(
+        log_file,
+        level="DEBUG",
+        rotation="1 MB",
+        retention="3 days",
+        compression="gz",
+        enqueue=True,
+        backtrace=False,
+        diagnose=False,
     )
 
-# @dataclass
-# class AutoclearConfig:
-#     interval: int = 3600
-#     max_retries: int= 3
-#     retry_delay: float= 1.0
 
 def _get_clear_command()-> list[str]:
 
@@ -138,7 +141,7 @@ def init():
 
 def main():
     log_file = _setup_env()
-    _setup_logger(log_file)
+    setup_logger(log_file)
     try:
 
         interval = int(sys.argv[1]) if len(sys.argv) > 1 else 3600
