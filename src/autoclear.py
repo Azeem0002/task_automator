@@ -5,12 +5,12 @@ import sys
 import time
 import subprocess
 from pathlib import Path
-from dataclasses import dataclass
 from typing import Callable
 
 from platformdirs import PlatformDirs
 from loguru import logger
 from tenacity import retry, stop_after_attempt, wait_fixed
+from src.config.settings import AutoclearConfig
 
 def _setup_env()-> Path:
 
@@ -58,15 +58,15 @@ def _setup_logger(file_log: Path)-> None:
         backtrace=True
     )
 
-@dataclass
-class AutoclearConfig:
-    interval: int = 3600
-    max_retries: int= 3
-    retry_delay: float= 1.0
+# @dataclass
+# class AutoclearConfig:
+#     interval: int = 3600
+#     max_retries: int= 3
+#     retry_delay: float= 1.0
 
 def _get_clear_command()-> list[str]:
 
-    command = ["clear", "/c", "cls"] if os.name == "nt" else ["clear"]
+    command = ["cmd", "/c", "cls"] if os.name == "nt" else ["clear"]
     return command
 
 def _execute_command(command: list[str])-> None:
@@ -112,7 +112,7 @@ def with_retry(max_attempt: int, delay: float)-> Callable:
 
 def clear_terminal(config: AutoclearConfig):
 
-    command = _get_clear_command
+    command = _get_clear_command()
     operation = with_retry(config.max_retries, config.retry_delay)(_execute_command)
 
     if not operation:
@@ -136,8 +136,9 @@ def init():
     file_log = _setup_env()
     _setup_logger(file_log)
 
-
-if __name__=="__main__":
+def main():
+    log_file = _setup_env()
+    _setup_logger(log_file)
     try:
 
         interval = int(sys.argv[1]) if len(sys.argv) > 1 else 3600
@@ -146,3 +147,6 @@ if __name__=="__main__":
     except ValueError:
         logger.info("Invalid time interval")
         sys.exit(1)
+
+if __name__=="__main__":
+    main()

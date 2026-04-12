@@ -1,6 +1,6 @@
 [project]
 name = "task-automator"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.13"
@@ -12,3 +12,9 @@ dependencies = [
     "tenacity>=9.1.4",
     "typer>=0.24.1",
 ]
+
+[tool.hatch.version]
+source = "vcs"
+
+[project.scripts]
+autoclear = "api.cli:app"
