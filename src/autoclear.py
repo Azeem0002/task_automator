@@ -10,7 +10,7 @@ from typing import Callable
 from platformdirs import PlatformDirs
 from loguru import logger
 from tenacity import retry, stop_after_attempt, wait_fixed
-from src.config.settings import AutoclearConfig
+from config.settings import AutoclearConfig
 
 def _setup_env()-> Path:
 
@@ -137,7 +137,7 @@ def run_autoclear(config: AutoclearConfig)-> None:
 
 def init():
     file_log = _setup_env()
-    _setup_logger(file_log)
+    setup_logger(file_log)
 
 def main():
     log_file = _setup_env()

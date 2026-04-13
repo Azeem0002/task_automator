@@ -18,3 +18,4 @@ source = "vcs"
 
 [project.scripts]
 autoclear = "api.cli:app"
+autoclear-worker = "autoclear:main"

@@ -29,7 +29,7 @@ def _is_our_process(pid: int)-> bool:
     try:
         proc = psutil.Process(pid)
         cmdline = ' '.join(proc.cmdline())
-        return ("-m" in cmdline and "src.autoclear" in cmdline)
+        return ("autoclear-worker" in cmdline)
     except OSError:
         return False
 
@@ -62,7 +62,7 @@ def _write_pid_to_file(pid_file: Path, pid: int)-> None:
 def _spawn_process(interval: int)-> subprocess.Popen:
 
     # controller_dir = Path(__file__).parent.parent / "autoclear"
-    command = [sys.executable, "-m", "src.autoclear", str(interval)]
+    command = ["autoclear-worker", str(interval)]
 
     return subprocess.Popen(
         command,
@@ -95,8 +95,8 @@ def status_autoclear()-> str:
     try:
         proc = psutil.Process(pid)
         cmdline = proc.cmdline()
-        interval = cmdline[-1] if len(cmdline) >= 4 else "unknown"
-        return f"Autoclear is running with {interval}s     interval. (PID: {proc.pid})"
+        interval = cmdline[-1] if len(cmdline) >= 2 else "unknown"
+        return f"Autoclear is running with {interval}(s) interval. (PID: {proc.pid})"
     except:
         return f"Running: Autoclear (PID: {pid})"
     
