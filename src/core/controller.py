@@ -125,6 +125,7 @@ def stop_autoclear()-> str:
         return f"Autoclear stopped"
     
     except RuntimeError as e:
+        logger.error(f"Failed to stop {str(e)}")
         return f"Failed to stop Autoclear"
 
 def start_autoclear(interval: str)-> bool:
