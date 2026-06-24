@@ -17,5 +17,5 @@ dependencies = [
 source = "vcs"
 
 [project.scripts]
-autoclear = "api.cli:app"
-autoclear-worker = "autoclear:main"
+autoclear = "task_automator.cli.controller:main"
+autoclear-worker = "task_automator.workers.autoclear:main"

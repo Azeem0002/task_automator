@@ -9,7 +9,7 @@ from ..app.application import (
     get_autoclear_status,
     start_autoclear,
     restart_autoclear,
-    stop_autoclear
+    stop_autoclear,
 )
 from ..models.lifecycle_models import AutoclearStatus
 from ..adapters.runtime_adapter import is_dev_env, setup_env, setup_logger
@@ -70,6 +70,7 @@ def start(interval: str= typer.Option("1h", "--interval", "-i", help="Interval e
     time.sleep(1)
     typer.echo(result)
 
+@app.command()
 def restart(interval: str = typer.Option("1h", "--interval", "-i", help= "New interval (e.g. 600, 1m, 1h30m, 2h)")):
 
     try:
@@ -104,3 +105,8 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+
+# uv run -m  src.task_automator.cli.controller start
+# python -m  src.task_automator.cli.controller start

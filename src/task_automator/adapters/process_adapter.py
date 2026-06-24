@@ -187,7 +187,7 @@ def  _stop_process(wait: bool=True)-> bool:
 
 
 
-# public functions
+# public function API's
 
 def get_pid_file_path()-> Path:
     return _get_pid_file_path()
