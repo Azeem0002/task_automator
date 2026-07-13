@@ -145,7 +145,7 @@ wheels = [
 
 [[package]]
 name = "task-automator"
-source = { virtual = "." }
+source = { editable = "." }
 dependencies = [
     { name = "loguru" },
     { name = "platformdirs" },

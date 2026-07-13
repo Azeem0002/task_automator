@@ -60,9 +60,11 @@ def stop():
     typer.echo(stop_autoclear())
 
 @app.command()
-def start(interval: str= typer.Option("1h", "--interval", "-i", help="Interval e.g 60, 1m, 1h30m, 2h")):
+def start(interval: str= typer.Option("1h", "--interval", "-i", help="Interval e.g 60, 1m, 1h30m, 2h"),
+          system: bool = typer.Option(False, "--system", help="Start system-level service on linux"),
+          )-> None:
     try:
-        result = start_autoclear(interval)
+        result = start_autoclear(interval, system=system)
     except (ValueError, RuntimeError, OSError) as e:
         typer.echo(f"Error: {str(e)}")
         raise typer.Exit(code=1)
@@ -71,10 +73,12 @@ def start(interval: str= typer.Option("1h", "--interval", "-i", help="Interval e
     typer.echo(result)
 
 @app.command()
-def restart(interval: str = typer.Option("1h", "--interval", "-i", help= "New interval (e.g. 600, 1m, 1h30m, 2h)")):
+def restart(interval: str = typer.Option("1h", "--interval", "-i", help= "New interval (e.g. 600, 1m, 1h30m, 2h)"),
+            system:bool = typer.Option(False, "--system", help= "restart system-level service on linux"),
+            )-> None:
 
     try:
-        result = restart_autoclear(interval)
+        result = restart_autoclear(interval, system=system)
     except (ValueError, RuntimeError, OSError) as e:
         typer.echo(f"Error: {str(e)}")
         raise typer.Exit(code=1)
@@ -83,12 +87,12 @@ def restart(interval: str = typer.Option("1h", "--interval", "-i", help= "New in
     typer.echo(result)
 
 
-@app.command()
+@app.command("install-service")
 def install_service(
     interval: str = typer.Option("1h", "--interval", "-i", help="Interval e.g 60, 1m, 1h30m"),
     system:bool = typer.Option(False, "--system", help="install as system-level service on Linux")
 
-):
+)-> None:
     try:
         message, steps = install_autoclear_service(interval=interval, system=system)
     

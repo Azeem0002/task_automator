@@ -1,3 +1,7 @@
+[build-system]
+requires = ["hatchling>=1.25", "hatch-vcs>=0.4"]
+build-backend = "hatchling.build"
+
 [project]
 name = "task-automator"
 dynamic = ["version"]
@@ -16,6 +20,9 @@ dependencies = [
 [tool.hatch.version]
 source = "vcs"
 
+[tool.hatch.build.targets.wheel]
+packages = ["src/task_automator"]
+
 [project.scripts]
 autoclear = "task_automator.cli.controller:main"
-autoclear-worker = "task_automator.workers.autoclear:main"
+autoclear-worker = "src.task_automator.workers.autoclear:main"

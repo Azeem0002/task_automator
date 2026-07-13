@@ -9,10 +9,10 @@ def _detect_platform()-> str:
     if sys.platform.startswith("linux"):
         return "linux"
 
-    if sys.platform.startswith("darwin"):
-        return "darwin"
+    if sys.platform == ("darwin"):
+        return "mac"
     
-    return "unknown"
+    return "unknown platform"
     
 def detect_platform()-> str:
     return _detect_platform()

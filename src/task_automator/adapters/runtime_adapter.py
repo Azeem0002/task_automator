@@ -1,3 +1,4 @@
+
 import os
 import sys
 from loguru import logger
@@ -29,8 +30,21 @@ def _get_local_timezone():
     
     return ZoneInfo("UTC")
 
-def _get_worker_script_path()-> Path:
-    return Path(__file__).with_name("autoclear.py").resolve()
+def _get_worker_module() -> str:
+    """Return the importable module path for `python -m ...` worker launches."""
+    # Package layout uses workers/ with an s:
+    # task_automator/workers/autoclear.py -> task_automator.workers.autoclear
+    return "task_automator.workers.autoclear"
+
+
+def _get_worker_working_dir() -> Path:
+    """Return the directory where Python can import the task_automator package."""
+    # runtime_adapter.py lives in task_automator/adapters/.
+    # parents[1] is task_automator/, parents[2] is src/.
+    # `python -m task_automator.workers.autoclear` must run from src/
+    # unless the package is installed into the environment.
+    return Path(__file__).resolve().parents[2]
+
 
 def _setup_env()-> Path:
     dirs = _get_platform_dirs()
@@ -65,9 +79,9 @@ def _setup_logger(log_file):
 
         sink=log_file,
         level= "DEBUG",
-        format = "<green>{time:YYYY-MM-DD}</green> | <level>{level: <8}</level> | <cyan>{module}.{function}:{line}</cyan> | <level>{message}</level>",
         rotation= "1 MB",
         retention= "3 days",
+        compression="zip",
         enqueue=True,
         backtrace=False,
         diagnose=False,
@@ -81,8 +95,11 @@ def get_platform_dirs()-> PlatformDirs:
 def get_local_time_zone():
     return _get_local_timezone()
 
-def get_worker_script_path():
-    return _get_worker_script_path()
+def get_worker_module()-> str:
+    return _get_worker_module()
+
+def get_worker_working_dir()-> Path:
+    return _get_worker_working_dir()
 
 def setup_env()-> Path:
     return _setup_env()

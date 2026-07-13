@@ -23,6 +23,7 @@ def parse_duration_seconds(value: int | str,
     
     else:
         raise ValueError(f"{field_name} must be a number or time expression")
+    
     if seconds < MIN_DURATION_SECONDS:
         raise ValueError(f"{field_name} must be at least 1 minute")
     return seconds
@@ -32,7 +33,7 @@ def parse_interval(value: int | str)-> int:
     seconds = parse_duration_seconds(value, field_name = "interval")
     if seconds > 172800:
         raise ValueError("Interval too large. (max 2 days)")
-    return seconds
+    return seconds          
 
 def format_duration_seconds(seconds: int | None)-> str:
 

@@ -8,7 +8,7 @@ from pathlib import Path
 from loguru import logger
 
 from ..models.lifecycle_models import AutoclearStatus
-from ..adapters.runtime_adapter import get_worker_script_path
+from ..adapters.runtime_adapter import get_worker_module, get_worker_working_dir
 
 SYSTEMD_SERVICE_NAME = "autoclear.service"
 SYSTEMD_TIMER_NAME = "autoclear.timer"
@@ -44,26 +44,26 @@ def _read_systemd_property(unit_name: str, property_name: str, system:bool)-> st
     return result.stdout.strip() or None
 
 
-def _build_systemd_service(*, system: bool)-> str:
+def _build_systemd_service(*, interval_secs: int, system: bool)-> str:
 
     service_lines = [
-        "[unit]",
+        "[Unit]",
         "Description=Autoclear terminal worker",
         "",
-        "[service]",
+        "[Service]",
         "Type=oneshot"
     ]
 
     if system:
-        service_lines.append(f"user={getpass.getuser()}")
+        service_lines.append(f"User={getpass.getuser()}")
     
     service_lines.extend([
-        f"WorkingDirectory={get_worker_script_path().parent}",
-        f"ExecStart={_format_exec_args([sys.executable, str(get_worker_script_path()), '--once'])}",
-        "Environment=APP_env=prod",
+        f"WorkingDirectory={get_worker_working_dir()}",
+        f"ExecStart={_format_exec_args([sys.executable, '-m', get_worker_module(), str(interval_secs)])}",
+        "Environment=APP_ENV=prod",
         "Nice=10",
         "",
-        "[install]",
+        "[Install]",
         f"WantedBy={'multi-user.target' if system else 'default.target'}",
         "",
     ])
@@ -71,7 +71,7 @@ def _build_systemd_service(*, system: bool)-> str:
 
 def _build_systemd_timer(interval_secs: int)-> str:
     timer_lines = [
-        "unit",
+        "[Unit]",
         "Description= Run autoclear on a fixed interval",
         "",
         "[Timer]",
@@ -81,7 +81,7 @@ def _build_systemd_timer(interval_secs: int)-> str:
         "Persistent=true",
         "AccuracySec=1s",
         "",
-        "[install]",
+        "[Install]",
         "WantedBy=timers.target",
         "",
     ]
@@ -105,6 +105,14 @@ def _install_systemd_system(service_content: str, timer_content: str)-> tuple[Pa
     
     return service_path, timer_path
 
+
+def _reload_systemd(*, system:bool)-> None:
+    reload_result = _run_systemctl(["daemon-reload"], system=system)
+    if reload_result.returncode != 0:
+        raise RuntimeError(reload_result.stderr.strip() or "Failed to install systemd_timer")
+
+
+
 def _is_systemd_timer_installed(*, system: bool)-> bool:
 
     return _read_systemd_property(SYSTEMD_TIMER_NAME, "LoadState", system=system) == "loaded"
@@ -121,9 +129,9 @@ def _get_status_from_systemd(*, system: bool)-> AutoclearStatus:
             detail= "Autoclear systemd timer not installed"
         )
     
-    timer_state = _read_systemd_property(SYSTEMD_TIMER_NAME, "MainPID", system=system) or "Unknown"
-    service_state = _read_systemd_property(SYSTEMD_SERVICE_NAME, "MainPID", system=system) or "Unknown"
-    last_trigger = _read_systemd_property(SYSTEMD_TIMER_NAME, "LastTriggerUsec", system=system) or "n/a"
+    timer_state = _read_systemd_property(SYSTEMD_TIMER_NAME, "ActiveState", system=system) or "unknown"
+    service_state = _read_systemd_property(SYSTEMD_SERVICE_NAME, "ActiveState", system=system) or "unknown"
+    last_trigger = _read_systemd_property(SYSTEMD_TIMER_NAME, "LastTriggerUSec", system=system) or "n/a"
     main_pid = _read_systemd_property(SYSTEMD_SERVICE_NAME, "MainPID", system=system) or ""
     pid = int(main_pid) if main_pid.isdigit() and int(main_pid) > 0 else None
     next_elapse = _read_systemd_property(SYSTEMD_TIMER_NAME, "NextElapseUSecRealtime", system=system)
@@ -139,15 +147,18 @@ def _get_status_from_systemd(*, system: bool)-> AutoclearStatus:
 
 def _start_with_systemd(*, system:bool)-> str:
 
-    if not _is_systemd_timer_installed(system=system):
-        reload_result = _run_systemctl(["daemon-reload"], system=system)
-        if reload_result.returncode != 0:
-            raise RuntimeError(reload_result.stderr.strip() or "systemctl daemon-reload failed")
-    
-    if _is_systemd_timer_enabled(system=system):
+    _reload_systemd(system=system)
+
+    if _is_systemd_timer_installed(system=system):
         start_result = _run_systemctl(["start", SYSTEMD_TIMER_NAME], system=system)
         if start_result.returncode != 0:
-            raise RuntimeError(start_result.stderr.strip(), "systemctl start timer failed")
+            raise RuntimeError(start_result.stderr.strip() or "systemctl start timer failed")
+        logger.info("Autoclear started with installed systemd timer")
+        return "STARTED: Autoclear systemd backend"
+    
+    enable_result = _run_systemctl(["enable", "--now", SYSTEMD_TIMER_NAME], system=system)
+    if enable_result.returncode != 0:
+        raise RuntimeError(enable_result.stderr.strip(), "systemctl enable timer failed")
 
     logger.info("Autoclear started with installed systemd timer")
     return "STARTED: Autoclear systemd backend"
@@ -181,34 +192,35 @@ def _install_systemd_user(service_content: str, timer_content: str)-> tuple[Path
     return service_path, timer_path
 
 
-# public adapter
+# public adapter API
 
 def install_systemd_service(*, interval_secs: int, system: bool= False)-> tuple[str, list[str]]:
 
-    service_content = _build_systemd_service(system=system)
+    service_content = _build_systemd_service(interval_secs=interval_secs, system=system)
     timer_content = _build_systemd_timer(interval_secs)
 
     if system:
         service_path, timer_path= _install_systemd_system(service_content, timer_content)
+        _reload_systemd(system=system)
         return (
-            f"Installed system service at {service_path} and timer at {timer_path}",
+            f"Installed/updated system service at {service_path} and timer at {timer_path}",
             [
-                "use: sudo systemctl daemon-reload",
-                "Then run 'autoclear start' to enable and start the installed timer. "
+                "Then run `autoclear start --system` to enable/start the installed timer.",
+                "Rerun install-service with a new interval to update the timer.",
             ],
         )
 
     service_path, timer_path = _install_systemd_user(service_content, timer_content)
+    _reload_systemd(system=system)
     return (
-        f"Installed user service at {service_path} and timer at {timer_path}",
+        f"Installed/updated user service at {service_path} and timer at {timer_path}",
         [
-            "systemctl --user daemon-reload",
             f"loginctl enable-linger {getpass.getuser()}",
-            "Then run `autoclear start` to enable and tart the installed timer"
+            "Then run `autoclear start` to enable and start the installed timer.",
+            "Rerun install-service with a new interval to update the timer.",
         ],
     )
 
-# public adapter API
 
 def is_systemd_service_installed(*, system: bool= False)-> bool:
     

@@ -13,13 +13,49 @@ from ..adapters.runtime_adapter import setup_env, setup_logger
 from ..models.lifecycle_models import AutoclearConfig
 
 
+CLEAR_SEQUENCE = "\033[H\033[2J\033[3J"
+
+
 def _get_clear_command()-> list[str]:
 
     command = ["cmd", "/c", "cls"] if os.name == "nt" else ["clear"]
     return command
 
+def _get_target_tty_path() -> str | None:
+    """Return the terminal path the detached worker should clear, when one was provided."""
+    tty_path = os.getenv("AUTOCLEAR_TTY")
+    return tty_path.strip() if tty_path else None
+
+
+def _write_clear_sequence_to_tty(tty_path: str) -> None:
+    """Write a clear-screen sequence directly to the terminal that launched the worker."""
+    fd = os.open(tty_path, os.O_WRONLY | os.O_NOCTTY)
+    try:
+        os.write(fd, CLEAR_SEQUENCE.encode("utf-8"))
+    finally:
+        os.close(fd)
+
+
+def _write_clear_sequence_to_stdout() -> None:
+    """Write a clear-screen sequence to the foreground terminal."""
+    sys.stdout.write(CLEAR_SEQUENCE)
+    sys.stdout.flush()
+
+
 def _execute_command(command: list[str])-> None:
-    command = _get_clear_command()
+    target_tty = _get_target_tty_path()
+    if target_tty and os.name != "nt":
+        _write_clear_sequence_to_tty(target_tty)
+        return
+
+    if os.name != "nt" and sys.stdout.isatty():
+        _write_clear_sequence_to_stdout()
+        return
+
+    if os.name != "nt" and not sys.stdout.isatty():
+        logger.warning("No terminal attached; autoclear skipped this cycle")
+        return
+
     try:
         subprocess.run(command, timeout=5, check=True)
     
@@ -63,11 +99,6 @@ def clear_terminal(config: AutoclearConfig):
 
     command = _get_clear_command()
     operation = with_retry(config.max_retries, config.retry_delay)(_execute_command)
-    operation(command)
-
-    if not operation:
-        logger.warning(f"Too many commands")
-    
     operation(command)
 
 def run_autoclear(config: AutoclearConfig)-> None:
