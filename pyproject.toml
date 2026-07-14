@@ -25,4 +25,4 @@ packages = ["src/task_automator"]
 
 [project.scripts]
 autoclear = "task_automator.cli.controller:main"
-autoclear-worker = "src.task_automator.workers.autoclear:main"
+autoclear-worker = "task_automator.workers.autoclear:main"
