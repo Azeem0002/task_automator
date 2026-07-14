@@ -20,8 +20,8 @@ pipx install .
 autoclear install-service  # Install the worker as a service (platform-aware)
 autoclear install-service --system  # Optional: install as a system-level service on Linux
 
-autoclear start  # Default: `1h`
-autoclear start -i 1h30m
+autoclear start # Default: `1h`
+autoclear start -i 1h30m or autoclear start  1h 30m
 autoclear status
 autoclear stop
 autoclear restart -i 120m  # Default: `1h`
