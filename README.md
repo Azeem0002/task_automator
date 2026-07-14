@@ -1,8 +1,8 @@
 
-# AutoClear Task Automator
+# Task Automator
 
-Minimal CLI tool to run a background process at a fixed interval.  
-Handles process control (start/stop/restart), PID tracking, and logging out of the box.
+A lightweight CLI tool for running automated background worker processes on a schedule.  
+It handles process control (start/stop/restart), PID tracking, and logging out of the box, making it useful for any recurring worker task. AutoClear is included here as an example worker, but the same framework can be used for other automation jobs as well.
 
 ---
 
@@ -33,10 +33,3 @@ autoclear restart -i 120m
 
 ---
 
-# Logs location
-
-* **Linux:** `~/.local/state/autoclear/log/`
-* **Windows:** `C:\Users\<user>\AppData\Local\autoclear\Logs\`
-* **Mac:** `~/Library/Logs/autoclear/`
-
----
