@@ -1,6 +1,7 @@
 
 from ..models.lifecycle_models import AutoclearStatus
 from ..adapters.platform_adapter import detect_platform
+from ..adapters.runtime_adapter import is_dev_env
 from ..validators.validation import format_duration_seconds, parse_interval
 from ..adapters.process_adapter import (
     get_status_from_process,
@@ -14,6 +15,9 @@ from ..adapters.service_adapter import(
     start_service,
     stop_service,
 )
+
+
+
 
 def install_autoclear_service(interval: str= "1h", system: bool=False)-> tuple[str, list[str]]:
 
@@ -39,6 +43,31 @@ def _format_process_start_message(action: str, pid: int, interval_secs:int, targ
     return f"Autoclear {action} in background (PID: {pid}) with interval {interval_label}{target_text}"
 
 
+def _format_autoclear_status(status: AutoclearStatus)-> str:
+
+    state = "running" if status.is_running else "stopped"
+    parts = [f"Autoclear status: {state}", f"backend={status.backend}"]
+
+    if status.pid is not None:
+        parts.append(f"pid={status.pid}")
+    
+    if status.interval_secs is not None:
+        parts.append(f"interval = {format_duration_seconds(status.interval_secs)}")
+    
+    if status.last_trigger:
+        parts.append(f"last_trigger={status.last_trigger}")
+    if status.pid_file is not None and is_dev_env():
+        parts.append(f"pid_file= {status.pid_file}")
+    
+    if status.target_tty is not None and is_dev_env():
+        parts.append(f"target_tty= {status.target_tty}")
+    
+    if status.detail:
+        parts.append(f"detail= {status.detail}")
+    
+    return " | ".join(parts)
+
+
 # Application
 
 def _resolve_autoclear_backend(*, system: bool = False) -> str:
@@ -56,6 +85,16 @@ def _resolve_autoclear_backend(*, system: bool = False) -> str:
     # The process backend is the portable fallback for normal local runs and unsupported service platforms.
     return "process"
 
+def _resolve_interval_text(option_value: str, interval_parts: list[str]) -> str:
+    """Accept either `--interval 1h30m` or positional words like `1h 30m`."""
+    # Shells split spaces before Typer receives input. Supporting varargs here
+    # turns `start 1h 30m` back into the user meaning "one interval value".
+    if interval_parts and option_value != "1h":
+        raise ValueError("Use either positional interval or --interval, not both")
+    if interval_parts:
+        return " ".join(interval_parts)
+    return option_value
+
 
 def _start_process_backend(action: str, interval_secs: int) -> str:
     """Start the detached process backend and format the same user message for start/restart."""
@@ -72,6 +111,12 @@ def get_autoclear_status(*, system: bool = False) -> AutoclearStatus:
 
     return get_status_from_process()
 
+def format_autoclear_status(status: AutoclearStatus)-> str:
+    return _format_autoclear_status(status)
+
+
+def resolve_interval_text(option_value: str, interval_parts: list[str]) -> str:
+    return _resolve_interval_text(option_value, interval_parts)
 
 def start_autoclear(interval: str, *, system: bool) -> str:
     interval_secs = parse_interval(interval)

@@ -18,12 +18,13 @@ pipx install .
 ## AutoClear Commands
 
 autoclear install-service  # Install the worker as a service (platform-aware)
-autoclear install-service --system  # Optional: install as a system-level service on Linux or Windows
+autoclear install-service --system  # Optional: install as a system-level service on Linux
+
 autoclear start  # Default: `1h`
 autoclear start -i 1h30m
 autoclear status
 autoclear stop
-autoclear restart -i 120m
+autoclear restart -i 120m  # Default: `1h`
 
 ---
 
@@ -37,3 +38,19 @@ autoclear restart -i 120m
 
 ---
 
+# Problem
+The `autoclear` worker may not clear the correct terminal due to TTY detection issues, and can leave stale service configurations on both Linux (systemd) and Windows (Task Scheduler).
+
+# Fix
+To resolve TTY detection, first remove any stale systemd timers. Relevant adapters (`process_adapter.py`, `autoclear.py`, `controller.py`, `runtime_adapter.py`) have been updated for reliable TTY identification.
+
+**Linux (systemd):**
+```bash
+rm ~/.config/systemd/user/autoclear.timer
+rm ~/.config/systemd/user/autoclear.service
+systemctl --user daemon-reload
+```
+**Windows (Task Scheduler):**
+```powershell
+schtasks /delete /tn "Autoclear" /f
+```
