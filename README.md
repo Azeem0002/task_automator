@@ -8,19 +8,41 @@ It handles process control (start/stop/restart), PID tracking, and logging out o
 
 # Installation
 
+You can install and run this project using **uv** (recommended for automatic Python version management and speed) or **pipx** (for global system command installation).
+
+### Option 1: Using `uv` (Recommended)
+Make sure you have [uv](https://docs.astral.sh/uv/) installed, then run:
+
+```bash
+# Clone the repository
+git clone https://github.com/Azeem0002/task_automator.git
+cd task_automator
+
+# Install the autoclear command globally on your system
+uv tool install .
+```
+Once installed, you can run the commands below directly as `autoclear <command>`.
+
+*Note: If you are developing the project and do not want to install it globally, run `uv sync` to build the local virtual environment, and prefix all commands below with `uv run ` (e.g. `uv run autoclear start`).*
+
+### Option 2: Using `pipx`
+If you prefer to install the command globally to your system path using pipx:
+
+```bash
 git clone https://github.com/Azeem0002/task_automator.git
 cd task_automator
 pipx install .
+```
+Once installed, you can run the commands below directly.
 
-> Note: this project requires Python 3.13 or newer.
-> If you already installed it before and want to reinstall or update it, run `pipx install . --force`.
+> **Note**: This project requires Python 3.13 or newer. If using `pipx`, ensure your local Python interpreter is version 3.13+ (or run `pipx install . --python python3.13`). If using `uv`, the correct Python version will be downloaded and used automatically.
 
 ## AutoClear Commands
 
-autoclear install-service  # Install the worker as a service (platform-aware)
+autoclear install-service           # Install the worker as a service (platform-aware)
 autoclear install-service --system  # Optional: install as a system-level service on Linux
 
-autoclear start # Default: `1h`
+autoclear start                     # Default: `1h`
 autoclear start  1h 30m
 autoclear start -i 1h30m
 autoclear status
