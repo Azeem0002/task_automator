@@ -136,6 +136,8 @@ def _get_status_from_systemd(*, system: bool)-> AutoclearStatus:
     pid = int(main_pid) if main_pid.isdigit() and int(main_pid) > 0 else None
     next_elapse = _read_systemd_property(SYSTEMD_TIMER_NAME, "NextElapseUSecRealtime", system=system)
     detail = f"timer={timer_state}, service={service_state}"
+    if timer_state == "active" and service_state == "inactive":
+        detail += " (oneshot service is idle between timer runs)"
     return AutoclearStatus(
         backend= "systemd",
         is_running= timer_state == "active",

@@ -48,6 +48,9 @@ autoclear start -i 1h30m
 autoclear status
 autoclear stop
 autoclear restart -i 120m  # Default: `1h`
+autoclear start-service -i 1h
+autoclear stop-service
+autoclear status-service
 
 ---
 
@@ -66,6 +69,14 @@ The `autoclear` worker may not clear the correct terminal due to TTY detection i
 
 # Fix
 To resolve TTY detection, first remove any stale systemd timers. Relevant adapters (`process_adapter.py`, `autoclear.py`, `controller.py`, `runtime_adapter.py`) have been updated for reliable TTY identification.
+
+Process backend state is now scoped per terminal, so separate shells can run
+their own autoclear sessions without fighting over one global PID file.
+`autoclear start` now prefers the process backend by default; use
+`autoclear start-service` or `autoclear start --system` when you explicitly want
+systemd.
+For systemd installs, `timer=active` with `service=inactive` is expected for a
+oneshot worker between timer fires.
 
 **Linux (systemd):**
 ```bash

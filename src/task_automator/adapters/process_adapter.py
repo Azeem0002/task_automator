@@ -1,4 +1,4 @@
-
+import hashlib
 import os
 import sys
 import time
@@ -13,12 +13,27 @@ from ..models.lifecycle_models import AutoclearStatus
 
 
 def _get_pid_file_path()-> Path:
+    tty_path = _resolve_launch_terminal_path()
+    return _get_pid_file_path_for_tty(tty_path)
 
+
+def _get_legacy_pid_file_path() -> Path:
     data_dir = Path(get_platform_dirs().user_data_dir)
     return data_dir / "autoclear.pid"
 
-def _read_pid_file(*, warn_on_invalid: bool=True)-> int | None:
-    pid_file= _get_pid_file_path()
+
+def _get_pid_file_path_for_tty(tty_path: str | None) -> Path:
+    data_dir = Path(get_platform_dirs().user_data_dir)
+    if tty_path is None:
+        return data_dir / "autoclear-global.pid"
+
+    tty_name = Path(tty_path).name or "tty"
+    safe_name = "".join(char if char.isalnum() or char in {"-", "_"} else "-" for char in tty_name)
+    digest = hashlib.sha256(tty_path.encode("utf-8")).hexdigest()[:12]
+    return data_dir / f"autoclear-{safe_name}-{digest}.pid"
+
+
+def _read_pid_file_at_path(pid_file: Path, *, warn_on_invalid: bool = True) -> int | None:
     try:
         raw_pid = pid_file.read_text(encoding="utf-8").strip()
         return int(raw_pid)
@@ -29,6 +44,38 @@ def _read_pid_file(*, warn_on_invalid: bool=True)-> int | None:
             logger.warning(f"Invalid content at {pid_file}")
         pid_file.unlink(missing_ok=True)
         return None
+
+def _read_pid_file(*, tty_path: str | None = None, warn_on_invalid: bool=True)-> int | None:
+    if tty_path is None:
+        tty_path = _resolve_launch_terminal_path()
+
+    pid_file = _get_pid_file_path_for_tty(tty_path)
+    pid = _read_pid_file_at_path(pid_file, warn_on_invalid=warn_on_invalid)
+    if pid is not None:
+        return pid
+
+    legacy_pid_file = _get_legacy_pid_file_path()
+    if legacy_pid_file == pid_file:
+        return None
+
+    legacy_pid = _read_pid_file_at_path(legacy_pid_file, warn_on_invalid=warn_on_invalid)
+    if legacy_pid is None:
+        return None
+
+    process = _get_process(legacy_pid)
+    if process is None or not _is_autoclear_process(process):
+        return None
+
+    target_tty = _read_target_tty_from_process(process)
+    if tty_path is not None and target_tty is not None and target_tty != tty_path:
+        return None
+
+    _write_pid_file(legacy_pid, tty_path=tty_path)
+    try:
+        legacy_pid_file.unlink(missing_ok=True)
+    except OSError as error:
+        logger.warning(str(error))
+    return legacy_pid
     
     
 def _get_process(pid: int)-> psutil.Process | None:
@@ -53,9 +100,8 @@ def _is_autoclear_process(process: psutil.Process)-> bool:
     # Recognize both shapes so status does not remove a valid PID as stale.
     return any(part == worker_module or part.endswith("autoclear.py") for part in cmdline)
 
-def _write_pid_file(pid: int)-> None:
-
-    pid_file = _get_pid_file_path()
+def _write_pid_file(pid: int, *, tty_path: str | None = None)-> None:
+    pid_file = _get_pid_file_path_for_tty(tty_path)
     pid_file.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     logger.debug(f"writing {pid} to {pid_file}")
     pid_file.write_text(str(pid), encoding="utf-8")
@@ -108,13 +154,19 @@ def _resolve_launch_terminal_path()-> str | None:
     
     return None
 
-def _remove_pid_file()-> None:
-    pid_file = _get_pid_file_path()
+def _remove_pid_file(*, tty_path: str | None = None)-> None:
+    if tty_path is None:
+        tty_path = _resolve_launch_terminal_path()
+
+    pid_file = _get_pid_file_path_for_tty(tty_path)
     pid_file.unlink(missing_ok=True)
 
-def _get_active_process_pid_status(*, warn_on_invalid: bool=True)-> int | None:
+def _get_active_process_pid_status(*, tty_path: str | None = None, warn_on_invalid: bool=True)-> int | None:
 
-    pid = _read_pid_file(warn_on_invalid=warn_on_invalid)
+    if tty_path is None:
+        tty_path = _resolve_launch_terminal_path()
+
+    pid = _read_pid_file(tty_path=tty_path, warn_on_invalid=warn_on_invalid)
     if pid is None:
         return None
     
@@ -124,20 +176,19 @@ def _get_active_process_pid_status(*, warn_on_invalid: bool=True)-> int | None:
     
     logger.warning(f"Removing stale PID file of invalid process {pid}")
     try:
-        _remove_pid_file()
+        _remove_pid_file(tty_path=tty_path)
     except OSError as e:
         logger.warning(str(e))
     return None
 
 def _spawn_detached_process(interval_secs: int)-> int:
-
-    status = _get_status_from_process()
+    launch_tty = _resolve_launch_terminal_path()
+    status = _get_status_from_process(tty_path=launch_tty)
     if status.is_running:
         raise RuntimeError(f"Autoclear is already running. (PID: {status.pid})")
     
     worker_module = get_worker_module()
     env = os.environ.copy()
-    launch_tty = _resolve_launch_terminal_path()
     if os.name != "nt" and not launch_tty:
         raise RuntimeError("Could not detect the terminal to clear. Run start from an interactive terminal.")
     
@@ -167,7 +218,7 @@ def _spawn_detached_process(interval_secs: int)-> int:
             raise RuntimeError(f"autoclear failed to start with {exit_code}")
 
         if process.pid:
-            _write_pid_file(process.pid)
+            _write_pid_file(process.pid, tty_path=launch_tty)
         
         time.sleep(0.1)
 
@@ -221,10 +272,13 @@ def _build_running_process_status(pid: int, pid_file: Path)-> AutoclearStatus:
         target_tty=target_tty
     )
 
-def _get_status_from_process()-> AutoclearStatus:
+def _get_status_from_process(*, tty_path: str | None = None)-> AutoclearStatus:
 
-    pid_file = _get_pid_file_path()
-    active_pid = _get_active_process_pid_status(warn_on_invalid=False)
+    if tty_path is None:
+        tty_path = _resolve_launch_terminal_path()
+
+    pid_file = _get_pid_file_path_for_tty(tty_path)
+    active_pid = _get_active_process_pid_status(tty_path=tty_path, warn_on_invalid=False)
     if active_pid is None:
         return _build_stopped_process_status("Autoclear not running", pid_file)
     return _build_running_process_status(active_pid, pid_file) 
@@ -265,8 +319,8 @@ def  _stop_process(wait:bool= True)-> bool:
 def get_pid_file_path()-> Path:
     return _get_pid_file_path()
 
-def read_pid_file(*, warn_on_invalid:bool= True)-> int | None:
-    return _read_pid_file(warn_on_invalid=warn_on_invalid)
+def read_pid_file(*, tty_path: str | None = None, warn_on_invalid:bool= True)-> int | None:
+    return _read_pid_file(tty_path=tty_path, warn_on_invalid=warn_on_invalid)
 
 def get_process(pid: int)-> psutil.Process | None:
     return _get_process(pid)
@@ -274,14 +328,14 @@ def get_process(pid: int)-> psutil.Process | None:
 def is_autoclear_process(process: psutil.Process)-> bool:
     return _is_autoclear_process(process)
 
-def write_pid_file(pid: int)-> None:
-    return _write_pid_file(pid)
+def write_pid_file(pid: int, *, tty_path: str | None = None)-> None:
+    return _write_pid_file(pid, tty_path=tty_path)
 
-def remove_pid_file()-> None:
-    return _remove_pid_file()
+def remove_pid_file(*, tty_path: str | None = None)-> None:
+    return _remove_pid_file(tty_path=tty_path)
 
-def get_active_process_pid_status(*, warn_on_invalid:bool= True)-> int | None:
-    return _get_active_process_pid_status(warn_on_invalid=warn_on_invalid)
+def get_active_process_pid_status(*, tty_path: str | None = None, warn_on_invalid:bool= True)-> int | None:
+    return _get_active_process_pid_status(tty_path=tty_path, warn_on_invalid=warn_on_invalid)
 
 def spawn_detached_process(*, interval_secs: int | None)->int:
     if interval_secs is None:
@@ -291,8 +345,8 @@ def spawn_detached_process(*, interval_secs: int | None)->int:
 def stop_process(wait: bool=True)-> bool:
     return _stop_process(wait=wait)
 
-def get_status_from_process()-> AutoclearStatus:
-    return _get_status_from_process()
+def get_status_from_process(*, tty_path: str | None = None)-> AutoclearStatus:
+    return _get_status_from_process(tty_path=tty_path)
 
 def read_interval_seconds_from_process(process: psutil.Process)-> int | None:
     return _read_interval_from_process(process)

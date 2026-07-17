@@ -74,15 +74,12 @@ def _resolve_autoclear_backend(*, system: bool = False) -> str:
     """Choose the lifecycle backend before start/stop/status so each command follows one clear route."""
     platform = detect_platform()
 
-    # Explicit --system means the user wants the OS service manager on platforms that support it.
+    # Explicit --system means the user wants the OS service manager on Linux.
     if system and platform == "linux":
         return "service"
 
-    # Installed services should be controlled by the service adapter so status/start/stop stay consistent.
-    if platform in {"linux", "windows"} and is_service_installed(system=system):
-        return "service"
-
-    # The process backend is the portable fallback for normal local runs and unsupported service platforms.
+    # Detached process is the local default because `autoclear start` should do
+    # what the operator asked, not silently follow an old installed service.
     return "process"
 
 def _resolve_interval_text(option_value: str, interval_parts: list[str]) -> str:
@@ -125,6 +122,9 @@ def start_autoclear(interval: str, *, system: bool) -> str:
     if backend == "service":
         return start_service(interval_secs=interval_secs, system=system)
 
+    if detect_platform() == "linux" and get_service_status(system=False).is_running:
+        stop_service(system=False)
+
     return _start_process_backend("Started", interval_secs)
 
 
@@ -147,6 +147,9 @@ def restart_autoclear(interval: str, *, system: bool = False) -> str:
     if backend == "service":
         stop_service(system=system)
         return start_service(interval_secs=interval_secs, system=system)
+
+    if detect_platform() == "linux" and get_service_status(system=False).is_running:
+        stop_service(system=False)
 
     stop_process()
     return _start_process_backend("restarted", interval_secs)

@@ -27,7 +27,7 @@ def init()-> None:
 
 
 
-# Typer's public API
+# Typer's public CLI surface
 
 @ app.command()
 def status()-> None:
@@ -36,6 +36,32 @@ def status()-> None:
 @app.command()
 def stop():
     typer.echo(stop_autoclear())
+
+
+@app.command("status-service")
+def status_service(system: bool = typer.Option(True, "--system", help="Check system-level service on Linux")) -> None:
+    typer.echo(format_autoclear_status(get_autoclear_status(system=system)))
+
+
+@app.command("start-service")
+def start_service(
+    interval: str = typer.Option("1h", "--interval", "-i", help="Interval e.g 60, 1m, 1h30m, 2h"),
+    interval_parts: list[str] = typer.Argument(None, help="Optional interval words, e.g. 1h30m or 1h 30m"),
+    system: bool = typer.Option(True, "--system", help="Start system-level service on Linux"),
+) -> None:
+    try:
+        result = start_autoclear(resolve_interval_text(interval, interval_parts or []), system=system)
+    except (ValueError, RuntimeError, OSError) as e:
+        typer.echo(f"Error: {str(e)}")
+        raise typer.Exit(code=1)
+
+    time.sleep(1)
+    typer.echo(result)
+
+
+@app.command("stop-service")
+def stop_service(system: bool = typer.Option(True, "--system", help="Stop system-level service on Linux")) -> None:
+    typer.echo(stop_autoclear(system=system))
 
 @app.command()
 def start(interval: str= typer.Option("1h", "--interval", "-i", help="Interval e.g 60, 1m, 1h30m, 2h"),
@@ -93,5 +119,5 @@ if __name__ == "__main__":
 
 
 
-# uv run -m  src.task_automator.cli.controller start
-# python -m  src.task_automator.cli.controller start
+# uv run -m task_automator.cli.controller start
+# python -m task_automator.cli.controller start
