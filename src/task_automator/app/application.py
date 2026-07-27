@@ -167,7 +167,7 @@ def start_autoclear(interval: str, *, system: bool = False) -> str:
     interval_secs = parse_interval(interval)
     backend = _resolve_autoclear_backend(system=system)
     if backend == "service":
-        return start_service(interval_secs=interval_secs, system=system)
+        return start_service(system=system)
 
     if detect_platform() == "linux" and get_service_status(system=False).is_running:
         stop_service(system=False)
@@ -177,22 +177,38 @@ def start_autoclear(interval: str, *, system: bool = False) -> str:
 
 def stop_autoclear(*, system: bool = False) -> str:
     """
-    Stop autoclear through the same backend-selection rules used for start/status.
+    Stop autoclear across both process and native service backends.
 
     Flow:
         stop -> stop_autoclear
         stop_autoclear
-            -> detect_platform
-            -> stop_service | stop_process
+            -> stop_service
+            -> stop_process
     """
+    messages: list[str] = []
+    stop_errors: list[str] = []
 
-    backend = _resolve_autoclear_backend(system=system)
-    if backend == "service":
-        return stop_service(system=system)
+    platform = detect_platform()
+    if platform in {"linux", "windows"}:
+        try:
+            messages.append(stop_service(system=system))
+        except (RuntimeError, OSError) as error:
+            stop_errors.append(str(error))
 
-    stopped = stop_process()
-    if stopped:
-        return "Autoclear process backend stopped"
+    try:
+        if stop_process():
+            messages.append("Autoclear process backend stopped")
+    except (RuntimeError, OSError) as error:
+        stop_errors.append(str(error))
+
+    if messages:
+        if stop_errors:
+            messages.extend(stop_errors)
+        return " | ".join(messages)
+
+    if stop_errors:
+        return f"Autoclear already stopped | {' | '.join(stop_errors)}"
+
     return "Autoclear already stopped"
 
 
@@ -210,7 +226,7 @@ def restart_autoclear(interval: str, *, system: bool = False) -> str:
     stop_autoclear(system=system)
     backend = _resolve_autoclear_backend(system=system)
     if backend == "service":
-        return start_service(interval_secs=interval_secs, system=system)
+        return start_service(system=system)
 
     if detect_platform() == "linux" and get_service_status(system=False).is_running:
         stop_service(system=False)

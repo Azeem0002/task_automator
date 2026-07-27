@@ -39,18 +39,17 @@ Once installed, you can run the commands below directly.
 
 ## AutoClear Commands
 
-autoclear install-service           # Install or update the native OS backend
-autoclear install-service --system  # Optional: install as a system-level service on Linux
+autoclear install-service           # Install or update the persistent native service backend
+autoclear install-service --system  # Optional: manage the system-level persistent backend on Linux
 
 autoclear start                     # Default: `1h`
 autoclear start  1h 30m
 autoclear start -i 1h30m
 autoclear status
-autoclear stop
-autoclear restart -i 120m  # Default: `1h`
-autoclear start-service -i 1h       # Start an already installed native backend
-autoclear stop-service              # Stop the native backend
-autoclear status-service            # Check the native backend status
+autoclear stop                     # Stop both the detached process and installed service backend
+autoclear restart -i 120m           # Default: `1h`
+autoclear start-service             # Start backend persistence and crash recovery
+autoclear stop-service              # Stop the persistent native service backend
 
 ---
 
@@ -72,11 +71,14 @@ To resolve TTY detection, first remove any stale systemd timers. Relevant adapte
 
 Process backend state is now scoped per terminal, so separate shells can run
 their own autoclear sessions without fighting over one global PID file.
-`autoclear start` now prefers the process backend by default; use
-`autoclear install-service` to create or update the backend, then `autoclear start-service` or `autoclear start --system` when you explicitly want
-that installed service backend.
-For systemd installs, `timer=active` with `service=inactive` is expected for a
-oneshot worker between timer fires.
+Run `autoclear start` from the shell you want cleared. If you launch it from a
+wrapper script, export `AUTOCLEAR_TTY=$(tty)` first.
+`autoclear start` is the terminal-bound clearing path.
+Use `install-service`, `start-service`, and `stop-service` for backend
+persistence and crash recovery only. They do not recover an interactive shell
+session after reboot.
+If you want automatic relaunch after login, add a separate wrapper or login
+hook that starts the terminal-bound command in that session.
 
 **Linux (systemd):**
 ```bash

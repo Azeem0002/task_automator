@@ -1,5 +1,6 @@
 import hashlib
 import os
+import tempfile
 import sys
 import time
 import psutil
@@ -12,18 +13,45 @@ from ..adapters.runtime_adapter import get_platform_dirs, get_worker_module, get
 from ..models.lifecycle_models import AutoclearStatus
 
 
+def _can_write_pid_dir(pid_dir: Path) -> bool:
+    """Return whether autoclear can create and update PID files in a directory."""
+    try:
+        pid_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
+        test_file = pid_dir / ".autoclear-write-test"
+        with test_file.open("w", encoding="utf-8"):
+            pass
+        test_file.unlink(missing_ok=True)
+        return True
+    except OSError:
+        return False
+
+
+def _get_pid_storage_dir() -> Path:
+    """Return the first writable directory for autoclear PID files."""
+    candidate_dirs = [Path(get_platform_dirs().user_data_dir)]
+    fallback_dir = Path(tempfile.gettempdir()) / "autoclear" / "state"
+    if fallback_dir not in candidate_dirs:
+        candidate_dirs.append(fallback_dir)
+
+    for pid_dir in candidate_dirs:
+        if _can_write_pid_dir(pid_dir):
+            return pid_dir
+
+    raise OSError("Unable to prepare any writable autoclear PID directory")
+
+
 def _get_pid_file_path()-> Path:
     tty_path = _resolve_launch_terminal_path()
     return _get_pid_file_path_for_tty(tty_path)
 
 
 def _get_legacy_pid_file_path() -> Path:
-    data_dir = Path(get_platform_dirs().user_data_dir)
+    data_dir = _get_pid_storage_dir()
     return data_dir / "autoclear.pid"
 
 
 def _get_pid_file_path_for_tty(tty_path: str | None) -> Path:
-    data_dir = Path(get_platform_dirs().user_data_dir)
+    data_dir = _get_pid_storage_dir()
     if tty_path is None:
         return data_dir / "autoclear-global.pid"
 

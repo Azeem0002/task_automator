@@ -51,7 +51,7 @@ def _build_systemd_service(*, interval_secs: int, system: bool)-> str:
         "Description=Autoclear terminal worker",
         "",
         "[Service]",
-        "Type=oneshot"
+        "Type=simple"
     ]
 
     if system:
@@ -115,7 +115,8 @@ def _reload_systemd(*, system:bool)-> None:
 
 def _is_systemd_timer_installed(*, system: bool)-> bool:
 
-    return _read_systemd_property(SYSTEMD_TIMER_NAME, "LoadState", system=system) == "loaded"
+    unit_path = Path("/etc/systemd/system") / SYSTEMD_TIMER_NAME if system else _get_systemd_user_dir() / SYSTEMD_TIMER_NAME
+    return unit_path.exists()
 
 def _get_status_from_systemd(*, system: bool)-> AutoclearStatus:
 
@@ -137,7 +138,7 @@ def _get_status_from_systemd(*, system: bool)-> AutoclearStatus:
     next_elapse = _read_systemd_property(SYSTEMD_TIMER_NAME, "NextElapseUSecRealtime", system=system)
     detail = f"timer={timer_state}, service={service_state}"
     if timer_state == "active" and service_state == "inactive":
-        detail += " (oneshot service is idle between timer runs)"
+        detail += " (worker service is idle between timer runs)"
     return AutoclearStatus(
         backend= "systemd",
         is_running= timer_state == "active",
@@ -228,9 +229,8 @@ def is_systemd_service_installed(*, system: bool= False)-> bool:
     
     return _is_systemd_timer_installed(system=system)
 
-def start_systemd_service(*, interval_secs: int | None = None, system:bool = False)-> str:
+def start_systemd_service(*, system:bool = False)-> str:
 
-    del interval_secs
     return _start_with_systemd(system=system)
 
 def stop_systemd_service(*, system:bool= False)-> str:

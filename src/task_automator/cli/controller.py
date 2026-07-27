@@ -19,6 +19,10 @@ try:
         start_autoclear,
         stop_autoclear,
     )
+    from ..adapters.service_adapter import (
+        start_service as start_native_service,
+        stop_service as stop_native_service,
+    )
 
     from ..adapters.runtime_adapter import setup_env, setup_logger
 
@@ -31,6 +35,10 @@ except ImportError:
         restart_autoclear,
         start_autoclear,
         stop_autoclear,
+    )
+    from adapters.service_adapter import (
+        start_service as start_native_service,
+        stop_service as stop_native_service,
     )
     # from lifecycle_models import AutoclearStatus
     from runtime_adapter import setup_env, setup_logger
@@ -69,33 +77,24 @@ def stop(system: bool = typer.Option(False, "--system", help="Stop system-level 
     typer.echo(stop_autoclear(system=system))
 
 
-@app.command("status-service")
-def status_service(system: bool = typer.Option(True, "--system", help="Check system-level service on Linux")) -> None:
-    """Display the system-service status explicitly."""
-    typer.echo(format_autoclear_status(get_autoclear_status(system=system)))
-
-
 @app.command("start-service")
-def start_service(
-    interval: str = typer.Option("1h", "--interval", "-i", help="Interval e.g. 1m, 1h30m, 2h"),
-    interval_parts: list[str] = typer.Argument(None, help="Optional interval words, e.g. 1h30m or 1h 30m"),
-    system: bool = typer.Option(True, "--system", help="Start system-level service on Linux"),
-) -> None:
-    """Start the native service backend explicitly."""
+def start_service(system: bool = typer.Option(False, "--system", help="Start system-level service on Linux")) -> None:
+    """Start the persistent native service backend."""
     try:
-        result = start_autoclear(resolve_interval_text(interval, interval_parts or []), system=system)
+        result = start_native_service(system=system)
     except (ValueError, RuntimeError, OSError) as error:
         typer.echo(f"Error: {error}")
         raise typer.Exit(code=1)
 
     time.sleep(1)
     typer.echo(result)
+    typer.echo("Hint: use `autoclear start` in the terminal you want cleared. `start-service` is for backend persistence and crash recovery only; automatic relaunch after login needs a separate wrapper or login hook.")
 
 
 @app.command("stop-service")
-def stop_service(system: bool = typer.Option(True, "--system", help="Stop system-level service on Linux")) -> None:
+def stop_service(system: bool = typer.Option(False, "--system", help="Stop system-level service on Linux")) -> None:
     """Stop the native service backend explicitly."""
-    typer.echo(stop_autoclear(system=system))
+    typer.echo(stop_native_service(system=system))
 
 
 @app.command()
@@ -106,8 +105,6 @@ def start(
 ) -> None:
     """Start the requested runtime path."""
     try:
-        # Pass raw user text down to the application. Do not parse it here;
-        # parse_interval lives below the boundary so CLI/API can share the rule.
         result = start_autoclear(resolve_interval_text(interval, interval_parts or []), system=system)
     except (ValueError, RuntimeError, OSError) as error:
         typer.echo(f"Error: {error}")
@@ -115,6 +112,7 @@ def start(
 
     time.sleep(1)
     typer.echo(result)
+    typer.echo("Hint: run `autoclear start` in the terminal you want cleared. `start-service` is for persistence and restart only.")
 
 
 @app.command()
@@ -134,6 +132,7 @@ def restart(
 
     time.sleep(1)
     typer.echo(result)
+    typer.echo("Hint: run `autoclear start` in the terminal you want cleared. `start-service` is for persistence and restart only.")
 
 
 @app.command("install-service")

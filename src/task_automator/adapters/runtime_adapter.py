@@ -1,6 +1,7 @@
 
 import os
 import sys
+import tempfile
 from loguru import logger
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from platformdirs import PlatformDirs
@@ -46,11 +47,30 @@ def _get_worker_working_dir() -> Path:
     return Path(__file__).resolve().parents[2]
 
 
+def _can_write_log_file(log_dir: Path) -> bool:
+    """Return whether autoclear can create and append to its log file in a directory."""
+    try:
+        log_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
+        log_file = log_dir / "autoclear.log"
+        with log_file.open("a", encoding="utf-8"):
+            pass
+        return True
+    except OSError:
+        return False
+
+
 def _setup_env()-> Path:
-    dirs = _get_platform_dirs()
-    log_dir = Path(dirs.user_log_dir)
-    log_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
-    return log_dir/ "autoclear.log"
+    candidate_dirs = [Path(_get_platform_dirs().user_log_dir)]
+    fallback_dir = Path(tempfile.gettempdir()) / "autoclear" / "log"
+    if fallback_dir not in candidate_dirs:
+        candidate_dirs.append(fallback_dir)
+
+    for log_dir in candidate_dirs:
+        if _can_write_log_file(log_dir):
+            log_file = log_dir / "autoclear.log"
+            return log_file
+
+    raise OSError("Unable to prepare any writable autoclear log directory")
 
 def _is_dev_env()-> bool:
     return os.getenv("APP_ENV", "dev").strip().lower() != "prod"

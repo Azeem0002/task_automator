@@ -53,13 +53,17 @@ def _install_service(*, interval_secs: int | None = None, system:bool =  False)-
     raise RuntimeError(f"Unsupported platform: {platform}")
 
 
-def _start_service(*, interval_secs:int | None =None, system:bool=False)-> str:
+def _start_service(*, system:bool=False)-> str:
 
     platform = detect_platform()
     if platform == "linux":
-        return start_systemd_service(interval_secs=interval_secs, system=system)
+        if not _is_service_installed(system=system):
+            raise RuntimeError("Autoclear service backend is not installed. Run `autoclear install-service` first.")
+        return start_systemd_service(system=system)
     
     if platform == "windows":
+        if not _is_service_installed(system=system):
+            raise RuntimeError("Autoclear service backend is not installed. Run `autoclear install-service` first.")
         return start_task_scheduler_service()
     
     if platform == "mac":
@@ -102,8 +106,8 @@ def install_service(*, interval_secs: int | None, system:bool= False)-> tuple[st
 def is_service_installed(system:bool= False):
     return _is_service_installed(system=system)
 
-def start_service(interval_secs: int | None= None, system:bool=False)-> str:
-    return _start_service(interval_secs=interval_secs, system=system)
+def start_service(*, system:bool=False)-> str:
+    return _start_service(system=system)
 
 def stop_service(*, system:bool= False)-> str:
     return _stop_service(system=system)
