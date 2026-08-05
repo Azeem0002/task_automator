@@ -88,7 +88,7 @@ def start_service(system: bool = typer.Option(False, "--system", help="Start sys
 
     time.sleep(1)
     typer.echo(result)
-    typer.echo("Hint: use `autoclear start` in the terminal you want cleared. `start-service` is for backend persistence and crash recovery only; automatic relaunch after login needs a separate wrapper or login hook.")
+    typer.echo("Hint: use `autoclear start` for a terminal-scoped session. `start-service` is for persistent background jobs and crash recovery, including terminal-free workers.")
 
 
 @app.command("stop-service")
@@ -112,7 +112,7 @@ def start(
 
     time.sleep(1)
     typer.echo(result)
-    typer.echo("Hint: run `autoclear start` in the terminal you want cleared. `start-service` is for persistence and restart only.")
+    typer.echo("Hint: run `autoclear start` when you want a terminal-scoped session. `start-service` is for persistent background jobs and restart-only workflows.")
 
 
 @app.command()

@@ -64,29 +64,11 @@ autoclear stop-service              # Stop the persistent native service backend
 ---
 
 # Problem
-The `autoclear` worker may not clear the correct terminal due to TTY detection issues, and can leave stale service configurations on both Linux (systemd) and Windows (Task Scheduler).
+If every worker is treated as terminal-bound, `systemd` becomes a fake solution instead of a real runtime option.
 
 # Fix
-To resolve TTY detection, first remove any stale systemd timers. Relevant adapters (`process_adapter.py`, `autoclear.py`, `controller.py`, `runtime_adapter.py`) have been updated for reliable TTY identification.
+The detached process backend now supports both terminal-scoped and terminal-free launches. When a terminal exists, the worker records and targets that terminal. When no terminal exists, the worker falls back to a global PID file so service-style jobs can still run and be managed.
 
-Process backend state is now scoped per terminal, so separate shells can run
-their own autoclear sessions without fighting over one global PID file.
-Run `autoclear start` from the shell you want cleared. If you launch it from a
-wrapper script, export `AUTOCLEAR_TTY=$(tty)` first.
-`autoclear start` is the terminal-bound clearing path.
-Use `install-service`, `start-service`, and `stop-service` for backend
-persistence and crash recovery only. They do not recover an interactive shell
-session after reboot.
-If you want automatic relaunch after login, add a separate wrapper or login
-hook that starts the terminal-bound command in that session.
-
-**Linux (systemd):**
-```bash
-rm ~/.config/systemd/user/autoclear.timer
-rm ~/.config/systemd/user/autoclear.service
-systemctl --user daemon-reload
-```
-**Windows (Task Scheduler):**
-```powershell
-schtasks /delete /tn "Autoclear" /f
-```
+Use `autoclear start` for a terminal-scoped session.
+Use `install-service`, `start-service`, and `stop-service` for persistent background jobs, crash recovery, and terminal-free workers.
+If you already installed an older service unit, reinstall it after changing the runtime instead of deleting files by hand.

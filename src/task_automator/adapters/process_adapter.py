@@ -51,6 +51,11 @@ def _get_legacy_pid_file_path() -> Path:
 
 
 def _get_pid_file_path_for_tty(tty_path: str | None) -> Path:
+    """Return the PID file path for one terminal scope.
+
+    The worker backend prefers per-terminal state when a terminal exists, but it
+    also supports a terminal-free global worker path for service-style launches.
+    """
     data_dir = _get_pid_storage_dir()
     if tty_path is None:
         return data_dir / "autoclear-global.pid"
@@ -59,6 +64,11 @@ def _get_pid_file_path_for_tty(tty_path: str | None) -> Path:
     safe_name = "".join(char if char.isalnum() or char in {"-", "_"} else "-" for char in tty_name)
     digest = hashlib.sha256(tty_path.encode("utf-8")).hexdigest()[:12]
     return data_dir / f"autoclear-{safe_name}-{digest}.pid"
+
+
+def _get_global_pid_file_path() -> Path:
+    """Return the PID file used when the worker has no terminal scope."""
+    return _get_pid_file_path_for_tty(None)
 
 
 def _read_pid_file_at_path(pid_file: Path, *, warn_on_invalid: bool = True) -> int | None:
@@ -82,8 +92,14 @@ def _read_pid_file(*, tty_path: str | None = None, warn_on_invalid: bool=True)->
     if pid is not None:
         return pid
 
+    global_pid_file = _get_global_pid_file_path()
+    if global_pid_file != pid_file:
+        global_pid = _read_pid_file_at_path(global_pid_file, warn_on_invalid=warn_on_invalid)
+        if global_pid is not None:
+            return global_pid
+
     legacy_pid_file = _get_legacy_pid_file_path()
-    if legacy_pid_file == pid_file:
+    if legacy_pid_file in {pid_file, global_pid_file}:
         return None
 
     legacy_pid = _read_pid_file_at_path(legacy_pid_file, warn_on_invalid=warn_on_invalid)
@@ -186,8 +202,12 @@ def _remove_pid_file(*, tty_path: str | None = None)-> None:
     if tty_path is None:
         tty_path = _resolve_launch_terminal_path()
 
-    pid_file = _get_pid_file_path_for_tty(tty_path)
-    pid_file.unlink(missing_ok=True)
+    for pid_file in {
+        _get_pid_file_path_for_tty(tty_path),
+        _get_global_pid_file_path(),
+        _get_legacy_pid_file_path(),
+    }:
+        pid_file.unlink(missing_ok=True)
 
 def _get_active_process_pid_status(*, tty_path: str | None = None, warn_on_invalid: bool=True)-> int | None:
 
@@ -218,8 +238,8 @@ def _spawn_detached_process(interval_secs: int)-> int:
     worker_module = get_worker_module()
     env = os.environ.copy()
     if os.name != "nt" and not launch_tty:
-        raise RuntimeError("Could not detect the terminal to clear. Run start from an interactive terminal.")
-    
+        logger.warning("No terminal detected; starting without AUTOCLEAR_TTY")
+
     if launch_tty:
         env["AUTOCLEAR_TTY"] = launch_tty
     
