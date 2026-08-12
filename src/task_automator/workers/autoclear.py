@@ -8,6 +8,7 @@ from typing import Callable
 
 from loguru import logger
 from tenacity import retry, stop_after_attempt, wait_fixed
+import typer
 
 from ..adapters.runtime_adapter import setup_env, setup_logger
 from ..models.lifecycle_models import AutoclearConfig
@@ -101,30 +102,42 @@ def clear_terminal(config: AutoclearConfig):
     operation = with_retry(config.max_retries, config.retry_delay)(_execute_command)
     operation(command)
 
-def run_autoclear(config: AutoclearConfig)-> None:
+def run_autoclear_once(config: AutoclearConfig) -> None:
+    """Clear the terminal once and report success unless silent mode is enabled."""
+    clear_terminal(config)
+    if not os.getenv("AUTOCLEAR_SILENT"):
+        logger.success("Terminal cleared")
+
+
+def run_autoclear(config: AutoclearConfig) -> None:
 
     while True:
         try:
-            clear_terminal(config)
-            logger.success(f"Terminal cleared")
-        
+            run_autoclear_once(config)
         except RuntimeError:
             time.sleep(1)
         _sleep(config.interval)
 
 
     
-def init():
+def init() -> None:
     log_file =  setup_env()
     setup_logger(log_file)
 
-if __name__=="__main__":
+app = typer.Typer(help="Run the autoclear worker.")
+
+
+@app.command()
+def main(
+    interval: int = typer.Argument(3600, min=1, help="Seconds between terminal clears."),
+) -> None:
+    """Initialize the worker and run continuously."""
     init()
-    logger.info(f"Received interval: {sys.argv}")
-    try:
-        interval = int(sys.argv[1]) if len(sys.argv) > 1 else 3600
-        config = AutoclearConfig(interval, max_retries=5)
-        run_autoclear(config)
-    except ValueError:
-        logger.info("Invalid time interval")
-        sys.exit(1)
+    if not os.getenv("AUTOCLEAR_SILENT"):
+        logger.info(f"Received interval: {interval}s")
+    config = AutoclearConfig(interval)
+    run_autoclear(config)
+
+
+if __name__ == "__main__":
+    app()
