@@ -1,0 +1,12 @@
+[Unit]
+Description=Task Automator backup worker
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/backup-worker /path/to/source /path/to/backups --interval 3600
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=default.target

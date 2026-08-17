@@ -1,0 +1,12 @@
+[Unit]
+Description=Task Automator health monitor worker
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/health-worker --path /home --interval 60 --minimum-free-gb 1
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=default.target

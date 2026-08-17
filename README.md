@@ -2,7 +2,7 @@
 # Task Automator
 
 A lightweight CLI tool for running automated background worker processes on a schedule.  
-It handles process control (start/stop/restart), PID tracking, and logging out of the box, making it useful for any recurring worker task. AutoClear is included here as an example worker, but the same framework can be used for other automation jobs as well.
+It handles process control (start/stop/restart), PID tracking, and logging out of the box. It includes three workers: terminal-bound AutoClear, a periodic backup worker, and a disk health monitor.
 
 ---
 
@@ -51,6 +51,9 @@ autoclear restart -i 120m           # Default: `1h`
 autoclear start-service             # Start backend persistence and crash recovery
 autoclear stop-service              # Stop the persistent native service backend
 
+backup-worker /path/to/source /path/to/backups --interval 3600
+health-worker --path /home --interval 60 --minimum-free-gb 1
+
 ---
 
 ## Supported Interval Formats
@@ -60,6 +63,22 @@ autoclear stop-service              # Stop the persistent native service backend
 * `2m` → minutes
 * `1h` → hours or `1h30s`→ hours/secs
 * `1d` → daysMax interval: **2 days**
+
+The backup and health workers are terminal-independent and should run under
+systemd for crash recovery. Replace paths and executable locations in the
+service templates under `systemd/` before installing them. AutoClear keeps its
+terminal-oriented process behavior as the intentional exception.
+
+For a foreground health check during development:
+
+```bash
+cd ~/task_automator
+source .venv/bin/activate
+health-worker --path /home --interval 60 --minimum-free-gb 1
+```
+
+Stop the foreground worker with `Ctrl+C`. Use the systemd template when the
+worker must continue without an open terminal.
 
 ---
 

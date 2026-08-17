@@ -26,3 +26,5 @@ packages = ["src/task_automator"]
 [project.scripts]
 autoclear = "task_automator.cli.controller:main"
 autoclear-worker = "task_automator.workers.autoclear:main"
+backup-worker = "task_automator.workers.backup_worker:app"
+health-worker = "task_automator.workers.health_monitor:app"
