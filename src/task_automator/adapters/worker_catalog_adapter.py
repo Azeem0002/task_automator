@@ -83,6 +83,29 @@ def worker_details(worker_name: str) -> tuple[str, str]:
     return purpose, hint
 
 
+def _worker_flag(worker_name: str, flag_name: str) -> bool:
+    """Read one literal worker capability flag without importing user worker code.
+
+    A worker's module may have side effects, so discovery reads only its syntax
+    tree. This lets future workers explicitly say whether they need a terminal
+    without the controller executing them just to make a routing decision.
+    """
+    require_discovered_worker_module(worker_name, include_terminal_bound=True)
+    tree = ast.parse((_WORKERS_DIR / f"{worker_name}.py").read_text(encoding="utf-8"))
+    return any(
+        isinstance(node, ast.Assign)
+        and isinstance(node.value, ast.Constant)
+        and node.value.value is True
+        and any(isinstance(target, ast.Name) and target.id == flag_name for target in node.targets)
+        for node in tree.body
+    )
+
+
+def is_terminal_bound_worker(worker_name: str) -> bool:
+    """Return whether a worker requires the launching terminal or user session."""
+    return _worker_flag(worker_name, "WORKER_TERMINAL_BOUND")
+
+
 def is_background_worker(worker_name: str) -> bool:
     """Return whether a worker explicitly opts into detached execution.
 
@@ -90,15 +113,7 @@ def is_background_worker(worker_name: str) -> bool:
     be a short one-shot task, or have unsafe detach semantics; file discovery
     alone is not enough authority to run it in the background.
     """
-    require_discovered_worker_module(worker_name)
-    tree = ast.parse((_WORKERS_DIR / f"{worker_name}.py").read_text(encoding="utf-8"))
-    return any(
-        isinstance(node, ast.Assign)
-        and isinstance(node.value, ast.Constant)
-        and node.value.value is True
-        and any(isinstance(target, ast.Name) and target.id == "WORKER_BACKGROUND_SAFE" for target in node.targets)
-        for node in tree.body
-    )
+    return not is_terminal_bound_worker(worker_name) and _worker_flag(worker_name, "WORKER_BACKGROUND_SAFE")
 
 
 def discover_background_worker_names() -> list[str]:
@@ -108,32 +123,45 @@ def discover_background_worker_names() -> list[str]:
 
 def require_background_worker(worker_name: str) -> None:
     """Reject workers that were not explicitly designed for detached execution."""
+    if is_terminal_bound_worker(worker_name):
+        raise ValueError(
+            f"Worker '{worker_name}' is terminal-bound and cannot run detached or as a service. "
+            "Run it in the foreground or give it its own explicit session command."
+        )
     if not is_background_worker(worker_name):
         raise ValueError(f"Worker '{worker_name}' is foreground-only; set WORKER_BACKGROUND_SAFE = True to opt in.")
 
 
 def discover_worker_names(*, include_terminal_bound: bool = False) -> list[str]:
-    """Return safe worker modules; hide terminal-bound autoclear by default.
-
-    Autoclear has its own explicit lifecycle group and is not a generic worker
-    the user should start through ``workers run`` or ``workers start``.
-    """
+    """Return all safe worker modules; terminal-bound modules are foreground-only."""
     if not _WORKERS_DIR.is_dir():
         return []
     return sorted(
         path.stem
         for path in _WORKERS_DIR.glob("*.py")
         if path.stem not in _RESERVED_WORKER_STEMS
-        and (include_terminal_bound or path.stem != "autoclear")
+        and (include_terminal_bound or not _worker_flag_from_path(path, "WORKER_EXPLICIT_SESSION_COMMAND"))
         and not path.stem.startswith("_")
         and path.stem.isidentifier()
     )
 
 
-def require_discovered_worker_module(worker_name: str) -> str:
+def _worker_flag_from_path(path: Path, flag_name: str) -> bool:
+    """Read a literal capability flag from a candidate file during discovery."""
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    return any(
+        isinstance(node, ast.Assign)
+        and isinstance(node.value, ast.Constant)
+        and node.value.value is True
+        and any(isinstance(target, ast.Name) and target.id == flag_name for target in node.targets)
+        for node in tree.body
+    )
+
+
+def require_discovered_worker_module(worker_name: str, *, include_terminal_bound: bool = False) -> str:
     """Return an approved module path or reject traversal and unknown workers."""
     normalized = worker_name.strip()
-    worker_names = discover_worker_names()
+    worker_names = discover_worker_names(include_terminal_bound=include_terminal_bound)
     if normalized not in worker_names:
         available = ", ".join(worker_names) or "none"
         raise ValueError(f"Unknown worker '{worker_name}'. Available workers: {available}")
@@ -142,6 +170,8 @@ def require_discovered_worker_module(worker_name: str) -> str:
 
 def run_discovered_worker(worker_name: str, arguments: list[str]) -> int:
     """Run one discovered worker in the foreground without invoking a shell."""
+    # Foreground execution preserves the user's TTY, so terminal-bound workers
+    # are safe here. Only detached/service execution is prohibited for them.
     return subprocess.run(
         [sys.executable, "-m", require_discovered_worker_module(worker_name), *arguments],
         cwd=str(Path(__file__).resolve().parents[2]),
@@ -151,7 +181,7 @@ def run_discovered_worker(worker_name: str, arguments: list[str]) -> int:
 
 def spawn_discovered_worker(worker_name: str, arguments: list[str]) -> tuple[int, Path]:
     """Start one managed background worker and persist its PID for later control."""
-    module = require_discovered_worker_module(worker_name)
+    module = require_discovered_worker_module(worker_name, include_terminal_bound=True)
     require_background_worker(worker_name)
     if _managed_worker_pid(worker_name) is not None:
         raise RuntimeError(f"Worker '{worker_name}' is already running")

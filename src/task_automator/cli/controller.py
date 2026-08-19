@@ -11,37 +11,24 @@ import time
 import psutil
 import typer
 
-try:
-    from ..app.application import (
-        format_autoclear_status,
-        get_autoclear_status,
-        resolve_interval_text,
-        restart_autoclear,
-        start_autoclear,
-        stop_autoclear,
-    )
-    from ..adapters.runtime_adapter import setup_env, setup_logger
-    from ..adapters.worker_catalog_adapter import (
-        discover_background_worker_names, discover_worker_names, get_background_worker_status, run_discovered_worker,
-        spawn_discovered_worker, stop_background_worker, worker_details,
-    )
-
-except ImportError:
-    from application import (
-        format_autoclear_status,
-        get_autoclear_status,
-        resolve_interval_text,
-        restart_autoclear,
-        start_autoclear,
-        stop_autoclear,
-    )
-    # from lifecycle_models import AutoclearStatus
-    from runtime_adapter import setup_env, setup_logger
-    from worker_catalog_adapter import (
-        discover_background_worker_names, discover_worker_names, get_background_worker_status, run_discovered_worker,
-        spawn_discovered_worker, stop_background_worker, worker_details,
-    )
-    # from validation import format_duration_seconds
+from ..adapters.runtime_adapter import setup_env, setup_logger
+from ..adapters.worker_catalog_adapter import (
+    discover_background_worker_names,
+    discover_worker_names,
+    get_background_worker_status,
+    run_discovered_worker,
+    spawn_discovered_worker,
+    stop_background_worker,
+    worker_details,
+)
+from ..app.application import (
+    format_autoclear_status,
+    get_autoclear_status,
+    resolve_interval_text,
+    restart_autoclear,
+    start_autoclear,
+    stop_autoclear,
+)
 
 
 app = typer.Typer(name="task-automator", help="Cross-platform local worker automation controller")

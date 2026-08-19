@@ -18,6 +18,12 @@ from ..models.lifecycle_models import AutoclearConfig
 # workers never imports or starts the worker merely to explain it.
 WORKER_DESCRIPTION = "Clear the terminal that started it on a repeating interval."
 WORKER_ARGUMENT_HINT = "Use the explicit command: task-automator autoclear start --interval 2h"
+# This capability flag is deliberately generic. Any future worker that needs a
+# TTY, GUI session, clipboard, or interactive prompt should set it too.
+WORKER_TERMINAL_BOUND = True
+# Autoclear has a controller command because it must detach while remembering
+# the caller's TTY. Other terminal-bound workers may still use `workers run`.
+WORKER_EXPLICIT_SESSION_COMMAND = True
 
 
 CLEAR_SEQUENCE = "\033[H\033[2J\033[3J"

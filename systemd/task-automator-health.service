@@ -4,7 +4,10 @@ After=network.target
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/health-worker --path /home --interval 60 --minimum-free-gb 1
+# Module execution preserves package-relative imports. Replace paths for the
+# target machine; do not use an ambiguous global `health-worker` executable.
+WorkingDirectory=/home/az/task_automator
+ExecStart=/home/az/task_automator/.venv/bin/python -m task_automator.workers.disk_health_monitor --path /home --interval 60s --minimum-free-gb 1
 Restart=on-failure
 RestartSec=10
 

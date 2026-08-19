@@ -6,7 +6,10 @@ After=network.target
 Type=simple
 # The destination is intentionally omitted: the worker uses its app-owned
 # XDG data directory by default. Add --destination /path/to/backups to override.
-ExecStart=/usr/bin/python3 -m task_automator.workers.scheduled_backup /path/to/source --interval 1h
+# Use the virtual-environment interpreter so the installed package and its
+# dependencies are available. Replace these paths for the target machine.
+WorkingDirectory=/home/az/task_automator
+ExecStart=/home/az/task_automator/.venv/bin/python -m task_automator.workers.scheduled_backup /path/to/source --interval 1h
 Restart=on-failure
 RestartSec=10
 

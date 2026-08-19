@@ -62,6 +62,16 @@ disk-health-monitor --path /home --interval 60 --minimum-free-gb 1
 * `1h` → hours or `1h30s`→ hours/secs
 * `1d` → daysMax interval: **2 days**
 
+## Configuration, State, and Source Layout
+
+`src/task_automator/` contains only importable application code. Do not place
+machine-specific configuration, PID files, logs, or backups under `src/`.
+`platformdirs` selects the correct per-user directories on Linux, Windows, and
+macOS: configuration for user-editable settings, state for PID/checkpoint
+metadata, data for backups, and logs for diagnostics. The former `build/`
+directory was generated packaging output, not source configuration, and is not
+part of the application layout.
+
 The backup and health workers are terminal-independent and should run under
 systemd for crash recovery. Replace paths and executable locations in the
 service templates under `systemd/` before installing them. AutoClear is never
@@ -87,6 +97,11 @@ For the interactive list, optionally add `WORKER_DESCRIPTION` and
 To allow detached execution through `workers start`, explicitly add
 `WORKER_BACKGROUND_SAFE = True`. New workers are foreground-only by default;
 this prevents accidentally detaching a TTY-dependent or one-shot script.
+If a worker needs a terminal, GUI session, clipboard, or interactive prompt,
+also set `WORKER_TERMINAL_BOUND = True`. The catalog hides it from generic
+background execution and rejects `workers start` and service use. It remains
+safe to run in the foreground with `workers run`; autoclear has its own
+explicit session command because it must detach and clear the launching TTY.
 
 ```bash
 task-automator workers list
@@ -124,14 +139,11 @@ worker must continue without an open terminal.
 
 ---
 
-# Problem
-If every worker is treated as terminal-bound, `systemd` becomes a fake solution instead of a real runtime option.
+## Worker Capability Rule
 
-# Fix
-The detached process backend now supports both terminal-scoped and terminal-free launches. When a terminal exists, the worker records and targets that terminal. When no terminal exists, the worker falls back to a global PID file so service-style jobs can still run and be managed.
-
-Use `autoclear start` for a terminal-scoped session.
-Use the supplied systemd unit templates for terminal-independent background
-workers that need boot-time startup or crash recovery. Do not use systemd for
-autoclear: after a restart there is no trustworthy terminal to clear.
-If you already installed an older service unit, reinstall it after changing the runtime instead of deleting files by hand.
+Terminal-bound workers are a separate category, not merely foreground workers:
+they need a live user session and cannot be supervised safely after reboot.
+Set `WORKER_TERMINAL_BOUND = True` and expose an explicit session command.
+Terminal-independent workers may additionally opt into detached operation with
+`WORKER_BACKGROUND_SAFE = True`, then use a systemd template when boot-time
+startup or crash recovery is genuinely required.

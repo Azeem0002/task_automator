@@ -28,8 +28,11 @@ def _can_write_pid_dir(pid_dir: Path) -> bool:
 
 def _get_pid_storage_dir() -> Path:
     """Return the first writable directory for autoclear PID files."""
-    candidate_dirs = [Path(get_platform_dirs().user_data_dir)]
-    fallback_dir = Path(tempfile.gettempdir()) / "autoclear" / "state"
+    # A PID records live process lifecycle, not user data. Keep it in the OS
+    # state directory so it is separate from backups/configuration and follows
+    # the same cross-platform rule as every other Task Automator worker.
+    candidate_dirs = [Path(get_platform_dirs().user_state_dir)]
+    fallback_dir = Path(tempfile.gettempdir()) / "task-automator" / "state"
     if fallback_dir not in candidate_dirs:
         candidate_dirs.append(fallback_dir)
 

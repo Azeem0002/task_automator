@@ -10,10 +10,16 @@ from pathlib import Path
 
 
 
-APP_NAME = "autoclear"
+APP_NAME = "task-automator"
 APP_AUTHOR = "Al-Azeem"
 
 def _get_platform_dirs()-> PlatformDirs:
+    """Return Task Automator's cross-platform user directories.
+
+    Source-controlled defaults belong beside the package when they exist;
+    user-edited configuration, state, logs, and generated backups belong in
+    these OS-owned locations, never under ``src/`` or a build artifact.
+    """
     return PlatformDirs(APP_NAME, APP_AUTHOR)
 
 def _get_local_timezone():
