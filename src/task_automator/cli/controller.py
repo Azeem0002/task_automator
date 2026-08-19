@@ -8,6 +8,7 @@ Keep real orchestration out of here as much as possible.
 import shlex
 import time
 
+import psutil
 import typer
 
 try:
@@ -15,36 +16,31 @@ try:
         format_autoclear_status,
         get_autoclear_status,
         resolve_interval_text,
-        install_autoclear_service,
         restart_autoclear,
         start_autoclear,
         stop_autoclear,
     )
-    from ..adapters.service_adapter import (
-        start_service as start_native_service,
-        stop_service as stop_native_service,
-    )
-
     from ..adapters.runtime_adapter import setup_env, setup_logger
-    from ..adapters.worker_catalog_adapter import discover_worker_names, run_discovered_worker, spawn_discovered_worker, worker_details
+    from ..adapters.worker_catalog_adapter import (
+        discover_background_worker_names, discover_worker_names, get_background_worker_status, run_discovered_worker,
+        spawn_discovered_worker, stop_background_worker, worker_details,
+    )
 
 except ImportError:
     from application import (
         format_autoclear_status,
         get_autoclear_status,
         resolve_interval_text,
-        install_autoclear_service,
         restart_autoclear,
         start_autoclear,
         stop_autoclear,
     )
-    from adapters.service_adapter import (
-        start_service as start_native_service,
-        stop_service as stop_native_service,
-    )
     # from lifecycle_models import AutoclearStatus
     from runtime_adapter import setup_env, setup_logger
-    from worker_catalog_adapter import discover_worker_names, run_discovered_worker, spawn_discovered_worker, worker_details
+    from worker_catalog_adapter import (
+        discover_background_worker_names, discover_worker_names, get_background_worker_status, run_discovered_worker,
+        spawn_discovered_worker, stop_background_worker, worker_details,
+    )
     # from validation import format_duration_seconds
 
 
@@ -128,40 +124,67 @@ def run_worker_command(
     if exit_code:
         raise typer.Exit(code=exit_code)
 
-def status(system: bool = typer.Option(False, "--system", help="Check system-level service on Linux")) -> None:
-    """Display the current status to the caller."""
-    typer.echo(format_autoclear_status(get_autoclear_status(system=system)))
 
-
-def stop(system: bool = typer.Option(False, "--system", help="Stop system-level service on Linux")) -> None:
-    """Stop the requested runtime path."""
-    typer.echo(stop_autoclear(system=system))
-
-
-@app.command("start-service")
-def start_service(system: bool = typer.Option(False, "--system", help="Start system-level service on Linux")) -> None:
-    """Start the persistent native service backend."""
+@workers_app.command("start", context_settings={"allow_extra_args": True, "ignore_unknown_options": True})
+def start_worker_command(
+    ctx: typer.Context,
+    worker_name: str = typer.Argument(..., help="Worker filename without .py"),
+    arguments: list[str] = typer.Argument(None, help="Arguments passed to the selected worker"),
+) -> None:
+    """Start a terminal-independent worker in the background with lifecycle tracking."""
+    if worker_name == "autoclear":
+        raise typer.BadParameter("Use `task-automator autoclear start` for terminal-bound autoclear.")
     try:
-        result = start_native_service(system=system)
+        pid, log_path = spawn_discovered_worker(worker_name, [*(arguments or []), *ctx.args])
     except (ValueError, RuntimeError, OSError) as error:
-        typer.echo(f"Error: {error}")
-        raise typer.Exit(code=1)
-
-    time.sleep(1)
-    typer.echo(result)
-    typer.echo("Hint: use `autoclear start` for a terminal-scoped session. `start-service` is for persistent background jobs and crash recovery, including terminal-free workers.")
+        typer.echo(f"Error: {error}", err=True)
+        raise typer.Exit(code=2)
+    typer.echo(f"Started {worker_name} in background (PID {pid}). Log: {log_path}")
 
 
-@app.command("stop-service")
-def stop_service(system: bool = typer.Option(False, "--system", help="Stop system-level service on Linux")) -> None:
-    """Stop the native service backend explicitly."""
-    typer.echo(stop_native_service(system=system))
+@workers_app.command("status")
+def worker_status_command(worker_name: str = typer.Argument(..., help="Worker filename without .py")) -> None:
+    """Show the running state and log path for a managed background worker."""
+    try:
+        status_value = get_background_worker_status(worker_name)
+    except ValueError as error:
+        raise typer.BadParameter(str(error)) from error
+    state = "running" if status_value.is_running else "stopped"
+    typer.echo(f"{worker_name}: {state} | pid={status_value.pid or 'none'} | log={status_value.log_path}")
+
+
+@workers_app.command("stop")
+def stop_worker_command(worker_name: str = typer.Argument(..., help="Worker filename without .py")) -> None:
+    """Stop one controller-managed background worker."""
+    try:
+        status_value = stop_background_worker(worker_name)
+    except (ValueError, OSError, psutil.Error) as error:
+        typer.echo(f"Error: {error}", err=True)
+        raise typer.Exit(code=2)
+    typer.echo(f"Stopped {worker_name}. Log: {status_value.log_path}")
+
+
+@workers_app.command("logs")
+def worker_logs_command(worker_name: str = typer.Argument(..., help="Worker filename without .py")) -> None:
+    """Print the durable log path for a managed background worker."""
+    try:
+        typer.echo(get_background_worker_status(worker_name).log_path)
+    except ValueError as error:
+        raise typer.BadParameter(str(error)) from error
+
+def status() -> None:
+    """Display the current status to the caller."""
+    typer.echo(format_autoclear_status(get_autoclear_status()))
+
+
+def stop() -> None:
+    """Stop the requested runtime path."""
+    typer.echo(stop_autoclear())
 
 
 def _start_autoclear_from_text(
     interval: str,
     interval_parts: list[str] | None = None,
-    system: bool = False,
 ) -> None:
     """Run the plain-Python autoclear action after CLI input has been decoded.
 
@@ -170,93 +193,71 @@ def _start_autoclear_from_text(
     and ArgumentInfo objects before Typer invokes it.
     """
     try:
-        result = start_autoclear(resolve_interval_text(interval, interval_parts or []), system=system)
+        result = start_autoclear(resolve_interval_text(interval, interval_parts or []))
     except (ValueError, RuntimeError, OSError) as error:
         typer.echo(f"Error: {error}")
         raise typer.Exit(code=1)
 
     time.sleep(1)
     typer.echo(result)
-    typer.echo("Hint: run `task-automator autoclear start` when you want a terminal-scoped session. `start-service` is for persistent background jobs and restart-only workflows.")
+    typer.echo("Autoclear is session-scoped: it only manages the terminal that started it.")
 
 
 def start(
     interval: str = typer.Option("1h", "--interval", "-i", help="Interval e.g. 1m, 1h30m, 2h"),
     interval_parts: list[str] = typer.Argument(None, help="Optional interval words, e.g. 1h30m or 1h 30m"),
-    system: bool = typer.Option(False, "--system", help="Start system-level service on Linux"),
 ) -> None:
     """Start the requested runtime path."""
-    _start_autoclear_from_text(interval, interval_parts, system)
+    _start_autoclear_from_text(interval, interval_parts)
 
 
 @autoclear_app.command("start")
 def autoclear_start(
     interval: str = typer.Option("1h", "--interval", "-i", help="Interval e.g. 1m, 1h30m, 2h"),
     interval_parts: list[str] = typer.Argument(None, help="Optional interval words, e.g. 1h30m or 1h 30m"),
-    system: bool = typer.Option(False, "--system", help="Start system-level service on Linux"),
 ) -> None:
     """Start autoclear through its explicit worker command group."""
-    start(interval=interval, interval_parts=interval_parts, system=system)
+    start(interval=interval, interval_parts=interval_parts)
 
 
 @autoclear_app.command("status")
-def autoclear_status(system: bool = typer.Option(False, "--system", help="Check system-level service on Linux")) -> None:
+def autoclear_status() -> None:
     """Show autoclear status through its explicit worker command group."""
-    status(system=system)
+    status()
 
 
 @autoclear_app.command("stop")
-def autoclear_stop(system: bool = typer.Option(False, "--system", help="Stop system-level service on Linux")) -> None:
+def autoclear_stop() -> None:
     """Stop autoclear through its explicit worker command group."""
-    stop(system=system)
+    stop()
 
 
 @autoclear_app.command("restart")
 def autoclear_restart(
     interval: str = typer.Option("1h", "--interval", "-i", help="New interval e.g. 1m, 1h30m, 2h"),
     interval_parts: list[str] = typer.Argument(None, help="Optional interval words, e.g. 1h30m or 1h 30m"),
-    system: bool = typer.Option(False, "--system", help="Restart system-level service on Linux"),
 ) -> None:
     """Restart autoclear through its explicit worker command group."""
-    restart(interval=interval, interval_parts=interval_parts, system=system)
+    restart(interval=interval, interval_parts=interval_parts)
 
 
 @app.command()
 def restart(
     interval: str = typer.Option("1h", "--interval", "-i", help="New interval (e.g. 600, 2h 30m)"),
     interval_parts: list[str] = typer.Argument(None, help="Optional interval words, e.g. 1h30m or 1h 30m"),
-    system: bool = typer.Option(False, "--system", help="Restart system-level service on Linux"),
 ) -> None:
     """Restart the requested runtime path."""
     try:
         # Restart follows the same boundary rule as start: CLI accepts text,
         # application validates meaning, adapters perform process/service work.
-        result = restart_autoclear(resolve_interval_text(interval, interval_parts or []), system=system)
+        result = restart_autoclear(resolve_interval_text(interval, interval_parts or []))
     except (ValueError, RuntimeError, OSError) as error:
         typer.echo(f"Error: {error}")
         raise typer.Exit(code=1)
 
     time.sleep(1)
     typer.echo(result)
-    typer.echo("Hint: run `autoclear start` in the terminal you want cleared. `start-service` is for persistence and restart only.")
-
-
-@app.command("install-service")
-def install_service(
-    interval: str = typer.Option("1h", "--interval", "-i", help="Interval e.g. 1m, 5m, 2h"),
-    interval_parts: list[str] = typer.Argument(None, help="Optional interval words, e.g. 1h30m or 1h 30m"),
-    system: bool = typer.Option(False, "--system", help="Install as system-level service on Linux"),
-) -> None:
-    """Install or update service."""
-    try:
-        message, steps = install_autoclear_service(interval=resolve_interval_text(interval, interval_parts or []), system=system)
-    except (ValueError, RuntimeError) as error:
-        typer.echo(f"Error: {error}")
-        raise typer.Exit(code=1)
-
-    typer.echo(message)
-    for step in steps:
-        typer.echo(step)
+    typer.echo("Autoclear restart stays attached to the current terminal session.")
 
 
 @app.command()
@@ -282,7 +283,7 @@ def interactive() -> None:
             if exit_code:
                 typer.echo(f"Worker exited with code {exit_code}", err=True)
         elif choice == "2":
-            names = discover_worker_names()
+            names = ["autoclear", *discover_background_worker_names()]
             typer.echo(f"Background workers: {', '.join(names) or 'none'}")
             selected = typer.prompt("Worker name").strip()
             if selected == "autoclear":

@@ -24,10 +24,9 @@ source = "vcs"
 packages = ["src/task_automator"]
 
 [project.scripts]
-# Primary product command. ``autoclear`` remains below as a compatibility alias
-# for existing users who only use the terminal-clearing feature.
+# Primary product command. Autoclear is a feature group, not a second product
+# command, so operators always enter through ``task-automator``.
 task-automator = "task_automator.cli.controller:main"
-autoclear = "task_automator.cli.controller:main"
 autoclear-worker = "task_automator.workers.autoclear:main"
 scheduled-backup = "task_automator.workers.scheduled_backup:app"
 disk-health-monitor = "task_automator.workers.disk_health_monitor:app"

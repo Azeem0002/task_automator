@@ -40,26 +40,16 @@ Once installed, you can run the commands below directly.
 ## Commands
 
 `task-automator` is the primary command because it manages multiple workers.
-`autoclear` remains a compatible alias for the existing terminal-clear commands.
+Autoclear is an explicit command group under `task-automator`, not a second
+top-level command.
 
-task-automator install-service           # Install or update the persistent native service backend
-task-automator install-service --system  # Optional: manage the system-level persistent backend on Linux
-
-task-automator start                     # Default: `1h`
-task-automator start  1h 30m
-task-automator start -i 1h30m
-task-automator status
-task-automator stop                     # Stop both the detached process and installed service backend
-task-automator restart -i 120m           # Default: `1h`
-task-automator start-service             # Start backend persistence and crash recovery
-task-automator stop-service              # Stop the persistent native service backend
 task-automator autoclear start -i 60m    # Explicit autoclear form (recommended)
 task-automator autoclear status
 task-automator autoclear stop
 task-automator autoclear restart -i 2h
 task-automator interactive               # Guided menu for all worker actions
 
-scheduled-backup /path/to/source /path/to/backups --interval 3600
+task-automator workers run scheduled_backup /path/to/source --interval 1h
 disk-health-monitor --path /home --interval 60 --minimum-free-gb 1
 
 ---
@@ -74,8 +64,8 @@ disk-health-monitor --path /home --interval 60 --minimum-free-gb 1
 
 The backup and health workers are terminal-independent and should run under
 systemd for crash recovery. Replace paths and executable locations in the
-service templates under `systemd/` before installing them. AutoClear keeps its
-terminal-oriented process behavior as the intentional exception.
+service templates under `systemd/` before installing them. AutoClear is never
+a system service: it is bound to the live terminal session that started it.
 
 For a foreground health check during development:
 
@@ -93,19 +83,30 @@ Your worker should expose its own Typer CLI (or otherwise handle command-line
 arguments) and include a normal `if __name__ == "__main__": ...` entrypoint.
 For the interactive list, optionally add `WORKER_DESCRIPTION` and
 `WORKER_ARGUMENT_HINT` strings near the top of the module; for example,
-`WORKER_ARGUMENT_HINT = "Example: --path /home --interval 60"`.
+`WORKER_ARGUMENT_HINT = "Example: --path /home --interval 60s"`.
+To allow detached execution through `workers start`, explicitly add
+`WORKER_BACKGROUND_SAFE = True`. New workers are foreground-only by default;
+this prevents accidentally detaching a TTY-dependent or one-shot script.
 
 ```bash
 task-automator workers list
 task-automator workers run                 # choose a worker and enter its arguments
-task-automator workers run my_worker --interval 60
+task-automator workers run my_worker --interval 60s
+task-automator workers run scheduled_backup /path/to/source --interval 1h
+task-automator workers run scheduled_backup /path/to/source --destination /external/backups --interval 1h
+task-automator workers start disk_health_monitor --path /home --interval 5m
+task-automator workers status disk_health_monitor
+task-automator workers logs disk_health_monitor
+task-automator workers stop disk_health_monitor
 ```
 
 Worker filenames must be valid Python identifiers, such as `my_worker.py`.
 `workers run` is foreground-only. Start terminal-bound autoclear with
 `task-automator autoclear start -i 60m` so it detaches and your shell remains usable.
 Use `-- --help` only when you need a selected worker's help; normal worker
-options need one dash sequence, such as `workers run disk_health_monitor --path /home`.
+options need one dash sequence, such as `workers run disk_health_monitor --path /home --interval 60s`.
+The built-in periodic workers accept `60s`, `5m`, `2h`, or plain seconds such
+as `3600` through the shared duration parser.
 
 `disk_health_monitor` enforces its configured disk-free-space floor and reports
 disk free space, RAM usage/available RAM, and sampled CPU usage each interval.
@@ -113,13 +114,12 @@ CPU and RAM are observability signals in this MVP; only the disk floor stops
 the worker because CPU/RAM thresholds and a safe recovery policy are not yet
 configured.
 
-Interactive mode can start a future worker in the background and reports its
-PID plus log path. Scheduled backups write `BACKUP_PATH=/...` to that log after
-each successful snapshot. It first asks foreground versus background; choosing
-autoclear from Background then offers Start, Status, and Stop. At its interval
-prompt enter a value such as `2h`, not `--interval 2h`.
+`workers start` creates one controller-managed background process per worker
+name. Its PID is persisted in the app state directory, so `workers status`,
+`workers logs`, and `workers stop` work from a later shell. Scheduled backups
+write `BACKUP_PATH=/...` to that log after each successful snapshot.
 
-Stop the foreground worker with `Ctrl+C`. Use the systemd template when the
+Stop the foreground worker with `Ctrl+C`. Use the systemd template only when a
 worker must continue without an open terminal.
 
 ---
@@ -131,5 +131,7 @@ If every worker is treated as terminal-bound, `systemd` becomes a fake solution 
 The detached process backend now supports both terminal-scoped and terminal-free launches. When a terminal exists, the worker records and targets that terminal. When no terminal exists, the worker falls back to a global PID file so service-style jobs can still run and be managed.
 
 Use `autoclear start` for a terminal-scoped session.
-Use `install-service`, `start-service`, and `stop-service` for persistent background jobs, crash recovery, and terminal-free workers.
+Use the supplied systemd unit templates for terminal-independent background
+workers that need boot-time startup or crash recovery. Do not use systemd for
+autoclear: after a restart there is no trustworthy terminal to clear.
 If you already installed an older service unit, reinstall it after changing the runtime instead of deleting files by hand.

@@ -1,7 +1,7 @@
 
 from ..models.lifecycle_models import AutoclearStatus
 from ..adapters.platform_adapter import detect_platform
-from ..adapters.tskscheduler_adapter import install_task_scheduler_service
+from ..adapters.task_scheduler_adapter import install_task_scheduler_service
 from ..adapters.systemd_adapter import (
     get_status_from_systemd,
     install_systemd_service,
@@ -9,7 +9,7 @@ from ..adapters.systemd_adapter import (
     start_systemd_service,
     stop_systemd_service,
 )
-from ..adapters.tskscheduler_adapter import(
+from ..adapters.task_scheduler_adapter import(
     get_status_from_task_scheduler,
     is_task_scheduler_service_installed,
     install_task_scheduler_service,

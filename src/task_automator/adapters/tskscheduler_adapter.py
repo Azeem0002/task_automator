@@ -19,12 +19,16 @@ def _run_system_command(command: list[str], *, input_text: str | None= None)-> s
 
 def _build_windows_task_command(interval_secs: int)-> list[str]:
 
-    task_target = subprocess.list2cmdline([sys.executable, str(get_worker_module()), str(interval_secs)])
+    # Task Scheduler needs a stable task name and a distinct command to run.
+    # Module mode preserves package-relative imports on Windows too.
+    task_target = subprocess.list2cmdline([sys.executable, "-m", get_worker_module(), str(interval_secs)])
 
     return [
         "schtasks",
         "/create",
         "/tn",
+        WINDOWS_TASK_NAME,
+        "/tr",
         task_target,
         "/sc",
         "onlogon",
@@ -115,4 +119,3 @@ def install_task_scheduler_service(*, interval_secs: int)-> tuple[str, list[str]
         f"Windows Task '{WINDOWS_TASK_NAME}' created",
         ["Task will run when the current user logs on and lunch the autoclear worker"],
     )
-

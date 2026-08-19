@@ -1,8 +1,11 @@
 """Periodically check disk free space and fail when it drops below a limit."""
 
-WORKER_ARGUMENT_HINT = "Example: --path /home --interval 60 --minimum-free-gb 1"
-
 from __future__ import annotations
+
+# ``from __future__`` imports must come directly after the module docstring.
+# Put catalog metadata after it so the module stays importable.
+WORKER_ARGUMENT_HINT = "Example: --path /home --interval 60s --minimum-free-gb 1"
+WORKER_BACKGROUND_SAFE = True
 
 import shutil
 import time
@@ -11,6 +14,8 @@ from pathlib import Path
 import psutil
 import typer
 from loguru import logger
+
+from ..validators.validation import parse_duration_seconds
 
 
 def check_host_health(path: Path, minimum_free_gb: float) -> None:
@@ -49,11 +54,15 @@ app = typer.Typer(help="Periodically check host disk free space.")
 @app.command()
 def main(
     path: Path = typer.Option(Path.home(), exists=True, file_okay=False),
-    interval: int = typer.Option(60, min=1),
+    interval: str = typer.Option("60s", "--interval", "-i", help="Interval, e.g. 60s, 5m, or 2h"),
     minimum_free_gb: float = typer.Option(1.0, min=0.0),
 ) -> None:
     """Start continuous disk-health monitoring."""
-    run_disk_health_monitor(path.expanduser(), interval, minimum_free_gb)
+    try:
+        interval_seconds = parse_duration_seconds(interval, field_name="health-check interval")
+    except ValueError as error:
+        raise typer.BadParameter(str(error), param_hint="--interval") from error
+    run_disk_health_monitor(path.expanduser(), interval_seconds, minimum_free_gb)
 
 
 if __name__ == "__main__":

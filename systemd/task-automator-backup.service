@@ -4,7 +4,9 @@ After=network.target
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/backup-worker /path/to/source /path/to/backups --interval 3600
+# The destination is intentionally omitted: the worker uses its app-owned
+# XDG data directory by default. Add --destination /path/to/backups to override.
+ExecStart=/usr/bin/python3 -m task_automator.workers.scheduled_backup /path/to/source --interval 1h
 Restart=on-failure
 RestartSec=10
 
