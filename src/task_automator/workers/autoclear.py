@@ -14,6 +14,12 @@ from ..adapters.runtime_adapter import setup_env, setup_logger
 from ..models.lifecycle_models import AutoclearConfig
 
 
+# Worker-catalog metadata is read with ``ast`` by the controller, so listing
+# workers never imports or starts the worker merely to explain it.
+WORKER_DESCRIPTION = "Clear the terminal that started it on a repeating interval."
+WORKER_ARGUMENT_HINT = "Use the explicit command: task-automator autoclear start --interval 2h"
+
+
 CLEAR_SEQUENCE = "\033[H\033[2J\033[3J"
 
 

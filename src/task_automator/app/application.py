@@ -86,7 +86,9 @@ def _format_autoclear_status(status: AutoclearStatus) -> str:
         parts.append(f"last_trigger= {status.last_trigger}")
     if status.pid_file is not None and is_dev_env():
         parts.append(f"pid_file= {status.pid_file}")
-    if status.target_tty is not None and is_dev_env():
+    # The target terminal is operational state, not debug noise. Operators
+    # need it in every environment to confirm which terminal autoclear owns.
+    if status.target_tty is not None:
         parts.append(f"target_tty= {status.target_tty}")
     if status.detail:
         parts.append(f"detail= {status.detail}")
