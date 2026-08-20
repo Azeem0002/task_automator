@@ -72,10 +72,13 @@ metadata, data for backups, and logs for diagnostics. The former `build/`
 directory was generated packaging output, not source configuration, and is not
 part of the application layout.
 
-The backup and health workers are terminal-independent and should run under
-systemd for crash recovery. Replace paths and executable locations in the
-service templates under `systemd/` before installing them. AutoClear is never
-a system service: it is bound to the live terminal session that started it.
+The backup and health workers are terminal-independent and can use the native
+service supervisor for their OS when crash recovery is required: systemd on
+Linux or Task Scheduler on Windows. Start with
+[services/README.md](services/README.md); Linux unit templates live in
+`services/linux/` and Windows setup instructions live in `services/windows/`.
+Autoclear is never a system service: it is bound to the live terminal session
+that started it.
 
 For a foreground health check during development:
 
